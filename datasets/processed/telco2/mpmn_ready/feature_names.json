@@ -1,0 +1,23 @@
+[
+  "MonthlyCharges",
+  "tenure",
+  "gender",
+  "SeniorCitizen",
+  "Partner",
+  "Dependents",
+  "PhoneService",
+  "PaperlessBilling",
+  "Contract",
+  "InternetService_Fiber optic",
+  "InternetService_No",
+  "PaymentMethod_Credit card (automatic)",
+  "PaymentMethod_Electronic check",
+  "PaymentMethod_Mailed check",
+  "has_multiplelines",
+  "has_onlinesecurity",
+  "has_onlinebackup",
+  "has_deviceprotection",
+  "has_techsupport",
+  "has_streamingtv",
+  "has_streamingmovies"
+]

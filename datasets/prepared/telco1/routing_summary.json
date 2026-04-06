@@ -1,0 +1,8 @@
+{
+  "total_samples": 7043,
+  "cold_start_count": 834,
+  "cold_start_percentage": 11.841544796251597,
+  "non_cold_start_count": 6209,
+  "cold_churn_rate": 60.07194244604317,
+  "non_cold_churn_rate": 22.03253341923015
+}

@@ -1,0 +1,19 @@
+[
+  "CreditScore",
+  "Age",
+  "Balance",
+  "EstimatedSalary",
+  "Point Earned",
+  "Satisfaction Score",
+  "Tenure",
+  "HasCrCard",
+  "IsActiveMember",
+  "Gender",
+  "Geography_Germany",
+  "Geography_Spain",
+  "Card Type_GOLD",
+  "Card Type_PLATINUM",
+  "Card Type_SILVER",
+  "has_zero_balance",
+  "NumOfProducts"
+]
