@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, OrdinalEncoder
-from sklearn.feature_selection import VarianceThreshold
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -132,32 +131,29 @@ class ColdStartFeatureEngineer:
                 "Balance",
                 "EstimatedSalary",
                 "Point Earned",
-                "Satisfaction Score",   # added
             ],
             "minmax": ["Tenure"],
             "binary": ["HasCrCard", "IsActiveMember", "Gender"],
             "ordinal_bin": ["NumOfProducts"],  # bin 3+ → 3
             "ohe": ["Geography", "Card Type"],
             "engineered": ["has_zero_balance"],  # derived in _engineer()
-            "target_enc": [],
+            "target_enc": [],  # none needed for bank
         }
 
         self.telco1_config = {
             "standard": [
                 "Age",
                 "Number of Dependents",
-                "Number of Referrals",          # log1p applied first
+                "Number of Referrals",  # log1p applied first
                 "Avg Monthly Long Distance Charges",
-                "Avg Monthly GB Download",      # log1p applied first
+                "Avg Monthly GB Download",  # log1p applied first
                 "Monthly Charge",
-                "Satisfaction Score",           # added
-                "Total Charges",               # added — log1p applied first
             ],
             "minmax": ["Tenure in Months"],
             "binary": ["Gender", "Married", "Phone Service", "Paperless Billing"],
-            "contract": ["Contract"],           # ordinal 0/1/2
+            "contract": ["Contract"],  # ordinal 0/1/2
             "ohe": ["Offer", "Internet Type", "Payment Method", "Internet Service"],
-            "ternary": [                        # → 2 binary cols each
+            "ternary": [  # → 2 binary cols each
                 "Multiple Lines",
                 "Online Security",
                 "Online Backup",
@@ -199,7 +195,7 @@ class ColdStartFeatureEngineer:
     def _get_config(self) -> dict:
         if "bank" in self.dataset_type:
             return self.bank_config
-        elif "telco_2" in self.dataset_type or "telco2" in self.dataset_type:
+        elif "telco_2" in self.dataset_type:
             return self.telco2_config
         else:
             return self.telco1_config
@@ -426,12 +422,12 @@ class EstablishedFeatureEngineer:
             "Profile": [
                 "CreditScore",
                 "Age",
-                "Geography_Germany",    # fixed: was Geography_DE
-                "Geography_Spain",      # fixed: was Geography_FR
-                "Geography_France",     # fixed: was Geography_ES
+                "Geography_Germany",  # fixed: was Geography_DE
+                "Geography_Spain",  # fixed: was Geography_FR
+                "Geography_France",  # fixed: was Geography_ES
                 "Gender",
                 "EstimatedSalary",
-                "Satisfaction Score",   # added
+                "Satisfaction Score",  # added
             ],
             "Contract": [
                 "Tenure",
@@ -573,7 +569,16 @@ class EstablishedFeatureEngineer:
         # Binary columns
         for col in df.columns:
             unique_vals = set(str(v).lower().strip() for v in df[col].dropna().unique())
-            if unique_vals <= {"yes", "no", "1", "0", "true", "false", "male", "female"}:
+            if unique_vals <= {
+                "yes",
+                "no",
+                "1",
+                "0",
+                "true",
+                "false",
+                "male",
+                "female",
+            }:
                 col_map[col] = _encode_binary(df[col]).fillna(0).values
 
         # Numeric columns
@@ -588,7 +593,7 @@ class EstablishedFeatureEngineer:
         # One-hot for nominal categoricals
         for col in df.select_dtypes(include="object").columns:
             unique_vals = set(str(v).lower().strip() for v in df[col].dropna().unique())
-            is_binary   = unique_vals <= {"yes", "no", "true", "false", "male", "female"}
+            is_binary = unique_vals <= {"yes", "no", "true", "false", "male", "female"}
             is_contract = col == "Contract"
             if is_binary or is_contract:
                 continue
@@ -602,7 +607,8 @@ class EstablishedFeatureEngineer:
 
         # Ternary service columns
         ternary_candidates = [
-            c for c in df.columns
+            c
+            for c in df.columns
             if df[c].dtype == object
             and any("no " in str(v).lower() for v in df[c].dropna().unique())
         ]
@@ -613,15 +619,23 @@ class EstablishedFeatureEngineer:
 
         # Scale continuous cols
         num_cols = [
-            c for c in df.select_dtypes(include="number").columns
+            c
+            for c in df.select_dtypes(include="number").columns
             if c in col_map
-            and c not in [
-                "SeniorCitizen", "HasCrCard", "IsActiveMember",
-                "has_zero_balance", "NumOfProducts", "Contract",
+            and c
+            not in [
+                "SeniorCitizen",
+                "HasCrCard",
+                "IsActiveMember",
+                "has_zero_balance",
+                "NumOfProducts",
+                "Contract",
             ]
         ]
-        minmax_cols = [c for c in num_cols if c in ["Tenure", "tenure", "Tenure in Months"]]
-        std_cols    = [c for c in num_cols if c not in minmax_cols]
+        minmax_cols = [
+            c for c in num_cols if c in ["Tenure", "tenure", "Tenure in Months"]
+        ]
+        std_cols = [c for c in num_cols if c not in minmax_cols]
 
         if std_cols:
             X_std = np.column_stack([col_map[c] for c in std_cols]).astype(float)
@@ -669,7 +683,9 @@ class EstablishedFeatureEngineer:
             indices = [col_names.index(c) for c in group_cols if c in col_names]
             self.feature_groups[group_name] = indices
 
-        print(f"      - Groups: { {k: len(v) for k, v in self.feature_groups.items()} }")
+        print(
+            f"      - Groups: { {k: len(v) for k, v in self.feature_groups.items()} }"
+        )
 
         # Target
         target_col = next(

@@ -140,6 +140,10 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
         json.dump(cs_engineer.feature_names_out, f, indent=2)
     print(f"[CS-FE] Feature names → {feature_names_path}")
     print(f"[CS-FE] Total features: {len(cs_engineer.feature_names_out)}\n")
+    print("[CS-FE] Feature list:")
+    for i, name in enumerate(cs_engineer.feature_names_out):
+        print(f"         {i+1:2}. {name}")
+    print()
 
     # ═════════════════════════════════════════════════════════════════════════
     # STEP 4b — NON-COLD-START PATH (GATEFuse)
@@ -184,6 +188,17 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
     print(f"[NCS-FE] Feature groups → {groups_path}")
     print(f"[NCS-FE] Group sizes: { {k: len(v) for k, v in feat_groups.items()} }")
     print(f"[NCS-FE] Total features: {len(feat_names)}\n")
+    print("[NCS-FE] Feature list:")
+    for i, name in enumerate(feat_names):
+        print(f"          {i+1:2}. {name}")
+    print()
+    
+    print("[NCS-FE] Features by group:")
+    for group_name, indices in feat_groups.items():
+        print(f"          {group_name}:")
+    for idx in indices:
+        print(f"            [{idx:2}] {feat_names[idx]}")
+    print()
 
     print(f"{'='*70}")
     print(f"  FEATURE ENGINEERING COMPLETE — {dataset}")
@@ -194,11 +209,30 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
 
 
 if __name__ == "__main__":
-    run(
-        prepared_dir="../../datasets/prepared/bank",
-        dataset="bank",
-        out_dir="../../datasets/processed/bank",
-    )
+    datasets = [
+        {
+            "prepared_dir": "../../datasets/prepared/bank",
+            "dataset": "bank",
+            "out_dir": "../../datasets/processed/bank",
+        },
+        {
+            "prepared_dir": "../../datasets/prepared/telco1",
+            "dataset": "telco1",
+            "out_dir": "../../datasets/processed/telco1",
+        },
+        {
+            "prepared_dir": "../../datasets/prepared/telco2",
+            "dataset": "telco2",
+            "out_dir": "../../datasets/processed/telco2",
+        },
+    ]
+
+    for ds in datasets:
+        run(
+            prepared_dir=ds["prepared_dir"],
+            dataset=ds["dataset"],
+            out_dir=ds["out_dir"],
+        )
 
 
 

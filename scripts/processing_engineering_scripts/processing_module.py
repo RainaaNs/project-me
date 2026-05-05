@@ -36,15 +36,15 @@ class MinimalPreprocessor:
         # ── LEAKAGE FEATURES ─────────────────────────────────────────────────
         # Columns that directly reveal the outcome or are computed post-churn.
         self.leakage_columns = [
-            "Churn Category",    # Post-hoc: explains WHY they churned
-            "Churn Reason",      # Post-hoc: explains WHY they churned
-            "Churn Score",       # Post-hoc: model output, not a predictor
-            "CLTV",              # Post-hoc: computed using churn outcome
-            "Quarter",           # Data collection artefact
-            "Customer Status",   # Directly encodes churn label
-            "Lat Long",          # Raw geo string
-            "Latitude",          # Geo noise (not predictive at customer level)
-            "Longitude",         # Geo noise (not predictive at customer level)
+            "Churn Category",  # Post-hoc: explains WHY they churned
+            "Churn Reason",  # Post-hoc: explains WHY they churned
+            "Churn Score",  # Post-hoc: model output, not a predictor
+            "CLTV",  # Post-hoc: computed using churn outcome
+            "Quarter",  # Data collection artefact
+            "Customer Status",  # Directly encodes churn label
+            "Lat Long",  # Raw geo string
+            "Latitude",  # Geo noise (not predictive at customer level)
+            "Longitude",  # Geo noise (not predictive at customer level)
             # ── Bank: near-deterministic leakage ────────────────────────────
             # 99.5% of complainers churn, 99.9% of non-complainers don't.
             # This column is recorded AFTER the churn decision is made.
@@ -56,11 +56,11 @@ class MinimalPreprocessor:
         # Keeping both inflates the feature space with duplicate signal and
         # biases distance metrics in the MPMN embedding space.
         self.redundant_columns = [
-            "Under 30",          # = (Age < 30) — exact match
-            "Senior Citizen",    # = (Age >= 65) — exact match
+            "Under 30",  # = (Age < 30) — exact match
+            "Senior Citizen",  # = (Age >= 65) — exact match
             # "Dependents",      # = (Number of Dependents > 0) — kept, used in Telco_2
             # "Referred a Friend", # = (Number of Referrals > 0) — exact match
-            "Total Revenue",     # ≈ Total Charges − Total Refunds (r=0.97)
+            "Total Revenue",  # ≈ Total Charges − Total Refunds (r=0.97)
         ]
 
         # ── GEO / ADMIN NOISE (Telco 1 specific) ─────────────────────────────
@@ -338,19 +338,19 @@ class DataRouter:
         df_flagged = df.copy()
         df_flagged["is_cold_start"] = cold_start_flags.values
 
-        n_cold     = df_flagged["is_cold_start"].sum()
+        n_cold = df_flagged["is_cold_start"].sum()
         n_non_cold = len(df_flagged) - n_cold
-        cold_pct   = (n_cold / len(df_flagged)) * 100
+        cold_pct = (n_cold / len(df_flagged)) * 100
 
         self.stats = {
-            "total_samples":         len(df_flagged),
-            "cold_start_count":      int(n_cold),
+            "total_samples": len(df_flagged),
+            "cold_start_count": int(n_cold),
             "cold_start_percentage": cold_pct,
-            "non_cold_start_count":  int(n_non_cold),
-            "cold_churn_rate":       self._get_churn_rate(
+            "non_cold_start_count": int(n_non_cold),
+            "cold_churn_rate": self._get_churn_rate(
                 df_flagged[df_flagged["is_cold_start"] == 1]
             ),
-            "non_cold_churn_rate":   self._get_churn_rate(
+            "non_cold_churn_rate": self._get_churn_rate(
                 df_flagged[df_flagged["is_cold_start"] == 0]
             ),
         }
@@ -372,8 +372,8 @@ class DataRouter:
         self,
         df: pd.DataFrame,
         train_size: float = 0.70,
-        val_size:   float = 0.15,
-        test_size:  float = 0.15,
+        val_size: float = 0.15,
+        test_size: float = 0.15,
         random_state: int = 42,
     ) -> dict:
         """
@@ -409,7 +409,7 @@ class DataRouter:
             random_state=random_state,
         )
 
-        val_relative       = val_size / (train_size + val_size)
+        val_relative = val_size / (train_size + val_size)
         strat_key_trainval = (
             df_trainval[churn_col].astype(str)
             + "_"
@@ -423,7 +423,7 @@ class DataRouter:
         )
 
         def _report(name, d):
-            n_c     = d["is_cold_start"].sum()
+            n_c = d["is_cold_start"].sum()
             cr_cold = self._get_churn_rate(d[d["is_cold_start"] == 1])
             cr_warm = self._get_churn_rate(d[d["is_cold_start"] == 0])
             print(
@@ -434,8 +434,8 @@ class DataRouter:
             )
 
         _report("Train", df_train)
-        _report("Val",   df_val)
-        _report("Test",  df_test)
+        _report("Val", df_val)
+        _report("Test", df_test)
 
         return {"train": df_train, "val": df_val, "test": df_test}
 

@@ -41,7 +41,7 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import from the cold-start project's processing module.
-# Adjust this path if processing_module.py lives elsewhere in your structure.
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
 from processing_module import MinimalPreprocessor, RobustColdStartDetector, DataRouter
 
