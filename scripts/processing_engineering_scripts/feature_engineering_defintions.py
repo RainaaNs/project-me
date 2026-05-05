@@ -381,346 +381,378 @@ class ColdStartFeatureEngineer:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. ESTABLISHED ENGINEER  (GATEFuse Path)
+# 2. NON-COLD-START FEATURE ENGINEER  (GATEFuse Path)
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# Aligned with feature_engineering_non_cold.ipynb (the notebook that produced
+# the strong baseline) and with the user's group structure that worked well.
+#
+# Encoding rules:
+#   • Card Type    → ordinal (Silver=1, Gold=2, Platinum=3, Diamond=4),
+#                    single column, NOT one-hot encoded.
+#   • Service cols → single binary column (Yes=1, No=0, "No internet service"=0,
+#                    "No phone service"=0). Eligibility is already captured by
+#                    Internet Service / Phone Service columns.
+#   • Nominal OHE  → drop_first=True for telco1/telco2 (cleaner, no dummy trap).
+#                    Bank Geography keeps drop_first=False (matches downstream
+#                    model groups expecting all three dummies).
+#   • Continuous   → StandardScaler. No log1p.
+#   • Bounded      → MinMaxScaler (Satisfaction Score only).
+#   • Tenure       → StandardScaler for all three datasets.
+#   • No has_zero_balance feature.
+#
+# Group structure follows the user's previous setup, with these refinements:
+#   • CreditScore and EstimatedSalary live in Billing for bank (financial
+#     standing belongs with billing context — Profile stays demographic).
+#   • Point Earned in Usage (engagement signal).
+#   • Complain in Usage for bank (real raw column).
+#   • Number of Dependents (count) used for telco1; the redundant binary
+#     Dependents column is dropped.
+#   • Telco2 service columns are binary, not OHE — drastically reduces
+#     redundancy in the Usage group and balances group sizes.
 
 
-class EstablishedFeatureEngineer:
-    """
-    Phase 2b: Established User Feature Engineering for the GATEFuse model.
+class NonColdStartFeatureEngineer:
+    """Phase 2b: Non-Cold-Start Feature Engineering for GATEFuse."""
 
-    Strategy:
-      1. Feature Grouping (Profile, Contract, Billing, Usage) — preserved for
-         attention masking. Group indices are returned alongside the feature matrix.
-      2. Explicit encoding: binary map, ordinal for contract, one-hot for nominals,
-         ternary expansion for service columns.
-      3. StandardScaler for continuous, MinMaxScaler for bounded features.
-      4. Variance Threshold deliberately SKIPPED to preserve group index alignment.
-         (The GATEFuse model relies on stable column indices.)
-    """
+    _BINARY_MAP = {
+        "Yes": 1,
+        "No": 0,
+        "No internet service": 0,
+        "No phone service": 0,
+        "Male": 0,
+        "Female": 1,
+    }
+
+    _CARD_TYPE_MAP = {
+        "SILVER":   1,
+        "GOLD":     2,
+        "PLATINUM": 3,
+        "DIAMOND":  4,
+    }
 
     def __init__(self, dataset_type: str = "telco"):
         self.dataset_type = dataset_type.lower()
-        self.fitted = False
+        self.fitted       = False
 
         self.standard_scaler = StandardScaler()
-        self.minmax_scaler = MinMaxScaler(feature_range=(0, 1))
-        self.standard_cols: list = []
-        self.minmax_cols: list = []
+        self.minmax_scaler   = MinMaxScaler(feature_range=(0, 1))
+        self.standard_cols:  list = []
+        self.minmax_cols:    list = []
         self.ohe_categories: dict = {}
 
         self.feature_names_out: list = []
-        self.feature_groups: dict = {}
+        self.feature_groups:    dict = {}
 
-        # ── FEATURE GROUP CONFIGS ─────────────────────────────────────────────
-        # Geography OHE: France (reference, dropped), Germany, Spain
-        # Output columns: Geography_Germany, Geography_Spain
-        # Card Type OHE: Diamond (reference, dropped), Gold, Platinum, Silver
-        # Output columns: Card Type_Gold, Card Type_Platinum, Card Type_Silver
+        # ── PER-DATASET CONFIGS ───────────────────────────────────────────────
+        # group_layout column names must match what the encoders below produce.
+        # OHE columns appear as "<col>_<category>".
 
-        self.bank_groups = {
-            "Profile": [
-                "CreditScore",
-                "Age",
-                "Geography_Germany",  # fixed: was Geography_DE
-                "Geography_Spain",  # fixed: was Geography_FR
-                "Geography_France",  # fixed: was Geography_ES
-                "Gender",
-                "EstimatedSalary",
-                "Satisfaction Score",  # added
+        self.bank_config = {
+            "binary":  ["Gender"],
+            "ordinal": ["Card Type"],
+            "ohe":     ["Geography"],
+            "ohe_drop_first": {"Geography": False},   # match downstream model groups
+            "standard": [
+                "CreditScore", "Age", "Tenure", "Balance",
+                "EstimatedSalary", "Point Earned",
             ],
-            "Contract": [
-                "Tenure",
-                "Card Type_Gold",
-                "Card Type_Platinum",
-                "Card Type_Silver",
+            "minmax": ["Satisfaction Score"],
+            "passthrough_numeric": [
+                "NumOfProducts", "HasCrCard", "IsActiveMember", "Complain",
             ],
-            "Billing": ["Balance", "has_zero_balance", "Point Earned"],
-            "Usage": ["NumOfProducts", "HasCrCard", "IsActiveMember"],
+            "group_layout": {
+                "Profile": [
+                    "Geography_Germany", "Geography_Spain", "Geography_France",
+                    "Gender", "Age", "Satisfaction Score",
+                ],
+                "Contract": ["Tenure", "Card Type"],
+                "Billing":  ["Balance", "EstimatedSalary", "CreditScore"],
+                "Usage": [
+                    "NumOfProducts", "HasCrCard", "IsActiveMember",
+                    "Complain", "Point Earned",
+                ],
+            },
         }
 
-        self.telco1_groups = {
-            "Profile": [
-                "Gender",
-                "Age",
-                "Married",
-                "Number of Dependents",
-                "Satisfaction Score",
+        self.telco1_config = {
+            "binary": [
+                "Gender", "Married", "Referred a Friend",
+                "Phone Service", "Multiple Lines", "Internet Service",
+                "Online Security", "Online Backup",
+                "Device Protection Plan", "Premium Tech Support",
+                "Streaming TV", "Streaming Movies", "Streaming Music",
+                "Unlimited Data", "Paperless Billing",
             ],
-            "Contract": [
+            "ordinal": [],
+            "ohe":     ["Offer", "Internet Type", "Contract", "Payment Method"],
+            "ohe_drop_first": {
+                "Offer":          True,
+                "Internet Type":  True,
+                "Contract":       True,
+                "Payment Method": True,
+            },
+            "standard": [
+                "Age", "Number of Dependents", "Number of Referrals",
+                "Avg Monthly Long Distance Charges",
                 "Tenure in Months",
-                "Contract",
-                "Offer_Offer A",
-                "Offer_Offer B",
-                "Offer_Offer C",
-                "Offer_Offer D",
-                "Offer_Offer E",
-            ],
-            "Billing": [
-                "Monthly Charge",
-                "Total Charges",
-                "Total Refunds",
-                "Total Extra Data Charges",
-                "Total Long Distance Charges",
-                "Paperless Billing",
-                "Payment Method_Credit Card (automatic)",
-                "Payment Method_Electronic check",
-                "Payment Method_Mailed check",
-            ],
-            "Usage": [
-                "Phone Service",
-                "has_Multiple Lines",
-                "no_svc_Multiple Lines",
-                "Internet Service_Fiber optic",
-                "Internet Service_No",
-                "Internet Type_Cable",
-                "Internet Type_DSL",
-                "Internet Type_Fiber Optic",
-                "Internet Type_No Internet Service",
                 "Avg Monthly GB Download",
-                "has_Online Security",
-                "has_Online Backup",
-                "has_Device Protection Plan",
-                "has_Premium Tech Support",
-                "has_Streaming TV",
-                "has_Streaming Movies",
-                "has_Streaming Music",
-                "has_Unlimited Data",
+                "Monthly Charge", "Total Charges",
+                "Total Refunds", "Total Extra Data Charges",
+                "Total Long Distance Charges",
             ],
+            "minmax": ["Satisfaction Score"],
+            "passthrough_numeric": [],
+            "group_layout": {
+                "Profile": [
+                    "Gender", "Age", "Married",
+                    "Number of Dependents", "Satisfaction Score",
+                ],
+                "Contract": [
+                    "Tenure in Months",
+                    "Offer_Offer B", "Offer_Offer C", "Offer_Offer D", "Offer_Offer E",
+                    "Unlimited Data",
+                    "Contract_One Year", "Contract_Two Year",
+                ],
+                "Billing": [
+                    "Avg Monthly Long Distance Charges", "Paperless Billing",
+                    "Payment Method_Credit Card", "Payment Method_Mailed Check",
+                    "Monthly Charge", "Total Charges",
+                    "Total Refunds", "Total Extra Data Charges",
+                    "Total Long Distance Charges",
+                ],
+                "Usage": [
+                    "Referred a Friend", "Number of Referrals",
+                    "Phone Service", "Multiple Lines", "Internet Service",
+                    "Internet Type_DSL", "Internet Type_Fiber Optic",
+                    "Internet Type_No Internet",
+                    "Avg Monthly GB Download",
+                    "Online Security", "Online Backup",
+                    "Device Protection Plan", "Premium Tech Support",
+                    "Streaming TV", "Streaming Movies", "Streaming Music",
+                ],
+            },
         }
 
-        self.telco2_groups = {
-            "Profile": ["gender", "SeniorCitizen", "Partner", "Dependents"],
-            "Contract": [
-                "tenure",
-                "Contract",
-                "InternetService_Fiber optic",
-                "InternetService_No",
+        self.telco2_config = {
+            "binary": [
+                "gender", "Partner", "Dependents",
+                "PhoneService", "PaperlessBilling",
+                # Service cols switched from OHE to binary — collapses redundancy
+                # with InternetService_No and balances group sizes.
+                "MultipleLines", "OnlineSecurity", "OnlineBackup",
+                "DeviceProtection", "TechSupport",
+                "StreamingTV", "StreamingMovies",
             ],
-            "Billing": [
-                "MonthlyCharges",
-                "TotalCharges",
-                "PaperlessBilling",
-                "PaymentMethod_Credit card (automatic)",
-                "PaymentMethod_Electronic check",
-                "PaymentMethod_Mailed check",
-            ],
-            "Usage": [
-                "PhoneService",
-                "has_MultipleLines",
-                "no_svc_MultipleLines",
-                "has_OnlineSecurity",
-                "has_OnlineBackup",
-                "has_DeviceProtection",
-                "has_TechSupport",
-                "has_StreamingTV",
-                "has_StreamingMovies",
-            ],
+            "ordinal": [],
+            "ohe":     ["InternetService", "Contract", "PaymentMethod"],
+            "ohe_drop_first": {
+                "InternetService": True,
+                "Contract":        True,
+                "PaymentMethod":   True,
+            },
+            "standard": ["tenure", "MonthlyCharges", "TotalCharges"],
+            "minmax":   [],
+            "passthrough_numeric": ["SeniorCitizen"],
+            "group_layout": {
+                "Profile": ["gender", "SeniorCitizen", "Partner", "Dependents"],
+                "Contract": [
+                    "tenure",
+                    "Contract_One year", "Contract_Two year",
+                ],
+                "Billing": [
+                    "PaperlessBilling",
+                    "PaymentMethod_Credit card (automatic)",
+                    "PaymentMethod_Electronic check",
+                    "PaymentMethod_Mailed check",
+                    "MonthlyCharges", "TotalCharges",
+                ],
+                "Usage": [
+                    "PhoneService", "MultipleLines",
+                    "InternetService_Fiber optic", "InternetService_No",
+                    "OnlineSecurity", "OnlineBackup",
+                    "DeviceProtection", "TechSupport",
+                    "StreamingTV", "StreamingMovies",
+                ],
+            },
         }
 
-    def _get_group_config(self) -> dict:
+    # ── Config dispatch ───────────────────────────────────────────────────────
+
+    def _get_config(self) -> dict:
         if "bank" in self.dataset_type:
-            return self.bank_groups
+            return self.bank_config
         elif "telco_2" in self.dataset_type or "telco2" in self.dataset_type:
-            return self.telco2_groups
+            return self.telco2_config
         else:
-            return self.telco1_groups
+            return self.telco1_config
 
-    # ── Engineering helpers ───────────────────────────────────────────────────
+    # ── Encoding pipeline ─────────────────────────────────────────────────────
 
-    def _engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
+    def _apply_binary(self, df: pd.DataFrame, cols: list) -> dict:
+        """Map binary/ternary string columns to a single 0/1 column each."""
+        out = {}
+        for col in cols:
+            if col not in df.columns:
+                continue
+            mapped = df[col].map(self._BINARY_MAP)
+            if mapped.isna().any():
+                bad = df.loc[mapped.isna(), col].unique().tolist()
+                raise ValueError(
+                    f"Unmapped value(s) in column '{col}': {bad}. "
+                    f"Extend NonColdStartFeatureEngineer._BINARY_MAP if these "
+                    f"are legitimate categories."
+                )
+            out[col] = mapped.values.astype(float)
+        return out
 
-        if "Balance" in df.columns:
-            df["has_zero_balance"] = (df["Balance"] == 0).astype(int)
+    def _apply_ordinal(self, df: pd.DataFrame, cols: list) -> dict:
+        """Apply hardcoded ordinal mappings (currently only Card Type)."""
+        out = {}
+        for col in cols:
+            if col not in df.columns:
+                continue
+            if col == "Card Type":
+                series = df[col].astype(str).str.upper().str.strip()
+                mapped = series.map(self._CARD_TYPE_MAP)
+                if mapped.isna().any():
+                    bad = df.loc[mapped.isna(), col].unique().tolist()
+                    raise ValueError(f"Unmapped Card Type value(s): {bad}")
+                out[col] = mapped.values.astype(float)
+            else:
+                raise ValueError(f"No ordinal mapping defined for column '{col}'")
+        return out
 
-        if "NumOfProducts" in df.columns:
-            df["NumOfProducts"] = df["NumOfProducts"].clip(upper=3)
-
-        for col in [
-            "Number of Referrals",
-            "Avg Monthly GB Download",
-            "Total Charges",
-            "TotalCharges",
-        ]:
-            if col in df.columns:
-                df[col] = _safe_log1p(df[col].fillna(0))
-
-        return df
-
-    def _build_feature_matrix(self, df: pd.DataFrame, fit: bool) -> tuple:
-        """
-        Build the full feature matrix in a consistent column order
-        that matches the group config indices.
-        """
-        group_config = self._get_group_config()
-
-        # Flatten all columns referenced in groups (preserves order)
-        all_cols_ordered = []
-        seen = set()
-        for cols in group_config.values():
-            for c in cols:
-                if c not in seen:
-                    all_cols_ordered.append(c)
-                    seen.add(c)
-
-        col_map = {}
-
-        # Binary columns
-        for col in df.columns:
-            unique_vals = set(str(v).lower().strip() for v in df[col].dropna().unique())
-            if unique_vals <= {
-                "yes",
-                "no",
-                "1",
-                "0",
-                "true",
-                "false",
-                "male",
-                "female",
-            }:
-                col_map[col] = _encode_binary(df[col]).fillna(0).values
-
-        # Numeric columns
-        for col in df.select_dtypes(include="number").columns:
-            if col not in col_map:
-                col_map[col] = df[col].fillna(0).values.astype(float)
-
-        # Contract ordinal
-        if "Contract" in df.columns:
-            col_map["Contract"] = _encode_contract(df["Contract"]).values
-
-        # One-hot for nominal categoricals
-        for col in df.select_dtypes(include="object").columns:
-            unique_vals = set(str(v).lower().strip() for v in df[col].dropna().unique())
-            is_binary = unique_vals <= {"yes", "no", "true", "false", "male", "female"}
-            is_contract = col == "Contract"
-            if is_binary or is_contract:
+    def _apply_ohe(self, df: pd.DataFrame, cols: list,
+                   drop_first_map: dict, fit: bool) -> dict:
+        """One-hot encode nominal categoricals, locking categories at fit time."""
+        out = {}
+        for col in cols:
+            if col not in df.columns:
                 continue
             series = df[col].fillna("Unknown").astype(str)
+
             if fit:
-                cats = sorted(series.unique().tolist())
-                self.ohe_categories[col] = cats
+                self.ohe_categories[col] = sorted(series.unique().tolist())
             cats = self.ohe_categories.get(col, [])
-            for cat in cats[1:]:
-                col_map[f"{col}_{cat}"] = (series == cat).astype(int).values
 
-        # Ternary service columns
-        ternary_candidates = [
-            c
-            for c in df.columns
-            if df[c].dtype == object
-            and any("no " in str(v).lower() for v in df[c].dropna().unique())
-        ]
-        for col in ternary_candidates:
-            df_tern = _encode_ternary_service(df[col].fillna("No"))
-            for c in df_tern.columns:
-                col_map[c] = df_tern[c].values
+            drop_first   = drop_first_map.get(col, True)
+            cats_to_emit = cats[1:] if drop_first else cats
+            for cat in cats_to_emit:
+                out[f"{col}_{cat}"] = (series == cat).astype(int).values
+        return out
 
-        # Scale continuous cols
-        num_cols = [
-            c
-            for c in df.select_dtypes(include="number").columns
-            if c in col_map
-            and c
-            not in [
-                "SeniorCitizen",
-                "HasCrCard",
-                "IsActiveMember",
-                "has_zero_balance",
-                "NumOfProducts",
-                "Contract",
-            ]
-        ]
-        minmax_cols = [
-            c for c in num_cols if c in ["Tenure", "tenure", "Tenure in Months"]
-        ]
-        std_cols = [c for c in num_cols if c not in minmax_cols]
+    def _apply_standard(self, df: pd.DataFrame, cols: list, fit: bool) -> dict:
+        """StandardScaler. Fit on train only; transform on val/test."""
+        cols = [c for c in cols if c in df.columns]
+        if not cols:
+            return {}
+        # TotalCharges in telco datasets sometimes has stray non-numeric strings.
+        X = df[cols].apply(pd.to_numeric, errors="coerce").fillna(0).values.astype(float)
+        if fit:
+            self.standard_cols = cols
+            X = self.standard_scaler.fit_transform(X)
+        else:
+            X = self.standard_scaler.transform(X)
+        return {c: X[:, i] for i, c in enumerate(cols)}
 
-        if std_cols:
-            X_std = np.column_stack([col_map[c] for c in std_cols]).astype(float)
-            if fit:
-                self.standard_cols = std_cols
-                X_std = self.standard_scaler.fit_transform(X_std)
-            else:
-                X_std = self.standard_scaler.transform(X_std)
-            for i, c in enumerate(std_cols):
-                col_map[c] = X_std[:, i]
+    def _apply_minmax(self, df: pd.DataFrame, cols: list, fit: bool) -> dict:
+        """MinMaxScaler for bounded features (Satisfaction Score)."""
+        cols = [c for c in cols if c in df.columns]
+        if not cols:
+            return {}
+        X = df[cols].fillna(0).values.astype(float)
+        if fit:
+            self.minmax_cols = cols
+            X = self.minmax_scaler.fit_transform(X)
+        else:
+            X = self.minmax_scaler.transform(X)
+        return {c: X[:, i] for i, c in enumerate(cols)}
 
-        if minmax_cols:
-            X_mm = np.column_stack([col_map[c] for c in minmax_cols]).astype(float)
-            if fit:
-                self.minmax_cols = minmax_cols
-                X_mm = self.minmax_scaler.fit_transform(X_mm)
-            else:
-                X_mm = self.minmax_scaler.transform(X_mm)
-            for i, c in enumerate(minmax_cols):
-                col_map[c] = X_mm[:, i]
+    def _apply_passthrough(self, df: pd.DataFrame, cols: list) -> dict:
+        """Already-numeric columns that need no scaling (e.g. NumOfProducts, SeniorCitizen)."""
+        out = {}
+        for col in cols:
+            if col not in df.columns:
+                continue
+            out[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).values.astype(float)
+        return out
 
-        # Build matrix in fixed group order
-        available = [c for c in all_cols_ordered if c in col_map]
-        X = np.column_stack([col_map[c] for c in available]).astype(float)
+    # ── Matrix assembly ───────────────────────────────────────────────────────
 
-        return X, available
+    def _build_feature_matrix(self, df: pd.DataFrame, fit: bool) -> tuple:
+        config  = self._get_config()
+        col_map = {}
+
+        col_map.update(self._apply_binary  (df, config.get("binary", [])))
+        col_map.update(self._apply_ordinal (df, config.get("ordinal", [])))
+        col_map.update(self._apply_ohe     (df, config.get("ohe", []),
+                                            config.get("ohe_drop_first", {}), fit))
+        col_map.update(self._apply_standard(df, config.get("standard", []), fit))
+        col_map.update(self._apply_minmax  (df, config.get("minmax", []), fit))
+        col_map.update(self._apply_passthrough(df, config.get("passthrough_numeric", [])))
+
+        # Build the matrix in the fixed group_layout order. Columns declared in
+        # the layout but not produced (e.g. an OHE category absent from this
+        # split) are filled with zeros so group indices stay aligned. This
+        # mirrors the notebook's val/test column-alignment behaviour.
+        layout       = config["group_layout"]
+        ordered_cols = []
+        columns_data = []
+        for group_name, group_cols in layout.items():
+            for c in group_cols:
+                ordered_cols.append(c)
+                columns_data.append(
+                    col_map[c] if c in col_map else np.zeros(len(df), dtype=float)
+                )
+
+        X = np.column_stack(columns_data) if columns_data else np.empty((len(df), 0))
+        return X, ordered_cols
+
+    def _build_groups(self) -> dict:
+        layout = self._get_config()["group_layout"]
+        groups = {}
+        cursor = 0
+        for group_name, group_cols in layout.items():
+            n = len(group_cols)
+            groups[group_name] = list(range(cursor, cursor + n))
+            cursor += n
+        return groups
+
+    @staticmethod
+    def _extract_target(df: pd.DataFrame):
+        target_col = next(
+            (t for t in ["Churn", "Exited", "Churn Label"] if t in df.columns), None
+        )
+        if target_col is None:
+            return None
+        return (
+            df[target_col]
+            .map({"Yes": 1, "No": 0, "yes": 1, "no": 0, 1: 1, 0: 0})
+            .fillna(0)
+            .values
+        )
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def fit_transform(self, df: pd.DataFrame) -> tuple:
-        """
-        Fit and transform established user data.
-        Returns (X, y, feature_names, feature_groups).
-        """
-        print(f"   🔥 Fitting Established Engineer ({self.dataset_type})...")
-
-        df_eng = self._engineer_features(df)
-        X, col_names = self._build_feature_matrix(df_eng, fit=True)
+        """Fit on training data and transform it. Returns (X, y, names, groups)."""
+        print(f"   🔥 Fitting Non-Cold-Start Engineer ({self.dataset_type})...")
+        X, col_names = self._build_feature_matrix(df, fit=True)
         self.feature_names_out = col_names
+        self.feature_groups    = self._build_groups()
+        self.fitted            = True
 
-        # Build group → index mapping
-        group_config = self._get_group_config()
-        self.feature_groups = {}
-        for group_name, group_cols in group_config.items():
-            indices = [col_names.index(c) for c in group_cols if c in col_names]
-            self.feature_groups[group_name] = indices
-
-        print(
-            f"      - Groups: { {k: len(v) for k, v in self.feature_groups.items()} }"
-        )
-
-        # Target
-        target_col = next(
-            (t for t in ["Churn", "Exited", "Churn Label"] if t in df.columns), None
-        )
-        y = None
-        if target_col:
-            y = (
-                df[target_col]
-                .map({"Yes": 1, "No": 0, "yes": 1, "no": 0, 1: 1, 0: 0})
-                .fillna(0)
-                .values
-            )
-
-        self.fitted = True
-        return X, y, col_names, self.feature_groups
+        print(f"      - Feature count: {len(col_names)}")
+        print(f"      - Groups: { {k: len(v) for k, v in self.feature_groups.items()} }")
+        return X, self._extract_target(df), col_names, self.feature_groups
 
     def transform(self, df: pd.DataFrame) -> tuple:
-        """Transform new data using fitted parameters."""
+        """Transform val/test data using fitted parameters only — no re-fitting."""
         if not self.fitted:
-            raise ValueError("Call fit_transform() before transform().")
-        df_eng = self._engineer_features(df)
-        X, col_names = self._build_feature_matrix(df_eng, fit=False)
-        target_col = next(
-            (t for t in ["Churn", "Exited", "Churn Label"] if t in df.columns), None
-        )
-        y = None
-        if target_col:
-            y = (
-                df[target_col]
-                .map({"Yes": 1, "No": 0, "yes": 1, "no": 0, 1: 1, 0: 0})
-                .fillna(0)
-                .values
-            )
-        return X, y, col_names, self.feature_groups
+            raise ValueError("Call fit_transform() on training data before transform().")
+        X, col_names = self._build_feature_matrix(df, fit=False)
+        return X, self._extract_target(df), col_names, self.feature_groups
 
 
 # ─────────────────────────────────────────────────────────────────────────────

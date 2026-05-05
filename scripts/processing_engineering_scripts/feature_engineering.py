@@ -58,7 +58,7 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
-from cold_start_feature_engineering import ColdStartFeatureEngineer, EstablishedFeatureEngineer
+from scripts.processing_engineering_scripts.feature_engineering_defintions import ColdStartFeatureEngineer, EstablishedFeatureEngineer
 
 
 # ── Dataset type mapping ──────────────────────────────────────────────────────

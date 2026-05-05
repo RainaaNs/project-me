@@ -6,37 +6,43 @@ import torch.nn.functional as F
 # ─────────────────────────────────────────────────────────────────────────────
 # FEATURE GROUPS
 # ─────────────────────────────────────────────────────────────────────────────
-# Column names match the actual gatefuse_ready CSV output exactly.
-# Group sizes must match what EstablishedFeatureEngineer produces:
-#   Bank    : Profile=7, Contract=1, Billing=3, Usage=3  → total 14
-#   Telco_1 : Profile=5, Contract=6, Billing=6, Usage=5  → total 22 (excl. Churn)
-#   Telco_2 : Profile=4, Contract=4, Billing=6, Usage=1  → total 15 (excl. Churn)
+# Column names match the gatefuse_ready CSV output produced by
+# NonColdStartFeatureEngineer.group_layout exactly.
+#
+# Group sizes (excluding Churn):
+#   bank   : Profile=6  Contract=2  Billing=3   Usage=5    →  16 features
+#   telco1 : Profile=5  Contract=8  Billing=9   Usage=15   →  37 features
+#   telco2 : Profile=4  Contract=3  Billing=6   Usage=10   →  23 features
+#
+# If a name here doesn't match an output column from the engineer, training
+# will fail with a "Feature mismatch" error. Keep these two files in lockstep.
 
 FEATURE_GROUPS = {
 
     "bank": {
         "Profile":  [
-            "CreditScore",
-            "Age",
             "Geography_Germany",
             "Geography_Spain",
             "Geography_France",
             "Gender",
-            "EstimatedSalary",
+            "Age",
             "Satisfaction Score",
         ],
         "Contract": [
             "Tenure",
+            "Card Type",
         ],
         "Billing":  [
             "Balance",
-            "has_zero_balance",
-            "Point Earned",
+            "EstimatedSalary",
+            "CreditScore",
         ],
         "Usage":    [
             "NumOfProducts",
             "HasCrCard",
             "IsActiveMember",
+            "Complain",
+            "Point Earned",
         ],
     },
 
@@ -50,26 +56,42 @@ FEATURE_GROUPS = {
         ],
         "Contract": [
             "Tenure in Months",
-            "Contract",
             "Offer_Offer B",
             "Offer_Offer C",
             "Offer_Offer D",
             "Offer_Offer E",
+            "Unlimited Data",
+            "Contract_One Year",
+            "Contract_Two Year",
         ],
         "Billing":  [
+            "Avg Monthly Long Distance Charges",
+            "Paperless Billing",
+            "Payment Method_Credit Card",
+            "Payment Method_Mailed Check",
             "Monthly Charge",
             "Total Charges",
             "Total Refunds",
             "Total Extra Data Charges",
             "Total Long Distance Charges",
-            "Paperless Billing",
         ],
         "Usage":    [
+            "Referred a Friend",
+            "Number of Referrals",
             "Phone Service",
+            "Multiple Lines",
+            "Internet Service",
             "Internet Type_DSL",
             "Internet Type_Fiber Optic",
-            "Internet Type_No Internet Service",
+            "Internet Type_No Internet",
             "Avg Monthly GB Download",
+            "Online Security",
+            "Online Backup",
+            "Device Protection Plan",
+            "Premium Tech Support",
+            "Streaming TV",
+            "Streaming Movies",
+            "Streaming Music",
         ],
     },
 
@@ -82,20 +104,28 @@ FEATURE_GROUPS = {
         ],
         "Contract": [
             "tenure",
-            "Contract",
-            "InternetService_Fiber optic",
-            "InternetService_No",
+            "Contract_One year",
+            "Contract_Two year",
         ],
         "Billing":  [
-            "MonthlyCharges",
-            "TotalCharges",
             "PaperlessBilling",
             "PaymentMethod_Credit card (automatic)",
             "PaymentMethod_Electronic check",
             "PaymentMethod_Mailed check",
+            "MonthlyCharges",
+            "TotalCharges",
         ],
         "Usage":    [
             "PhoneService",
+            "MultipleLines",
+            "InternetService_Fiber optic",
+            "InternetService_No",
+            "OnlineSecurity",
+            "OnlineBackup",
+            "DeviceProtection",
+            "TechSupport",
+            "StreamingTV",
+            "StreamingMovies",
         ],
     },
 }
