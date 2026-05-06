@@ -311,7 +311,7 @@ def run(dataset: str, mpmn_dir: str, model_dir: str):
 # Replace with your directory paths before running.
 if __name__ == "__main__":
     run(
-        dataset="bank",
-        mpmn_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\bank\mpmn_ready",
+        dataset="telco2",
+        mpmn_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\mpmn_ready",
         model_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\ctgan",
     )

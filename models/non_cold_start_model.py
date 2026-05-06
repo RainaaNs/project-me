@@ -9,9 +9,10 @@ import torch.nn.functional as F
 # Column names match the gatefuse_ready CSV output produced by
 # NonColdStartFeatureEngineer.group_layout exactly.
 #
+
 # Group sizes (excluding Churn):
-#   bank   : Profile=6  Contract=2  Billing=3   Usage=5    →  16 features
-#   telco1 : Profile=5  Contract=8  Billing=9   Usage=15   →  37 features
+#   bank   : Profile=6  Contract=2  Billing=3   Usage=4    →  15 features
+#   telco1 : Profile=5  Contract=8  Billing=9   Usage=16   →  38 features
 #   telco2 : Profile=4  Contract=3  Billing=6   Usage=10   →  23 features
 #
 # If a name here doesn't match an output column from the engineer, training
@@ -41,7 +42,7 @@ FEATURE_GROUPS = {
             "NumOfProducts",
             "HasCrCard",
             "IsActiveMember",
-            "Complain",
+            # "Complain",
             "Point Earned",
         ],
     },

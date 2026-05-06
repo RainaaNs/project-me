@@ -149,8 +149,8 @@ def run(data_path: str, dataset: str, out_dir: str):
 
 if __name__ == "__main__":
     run(
-        data_path="../../datasets/original_datasets/telco2.csv",
-        dataset="telco2",
-        out_dir="../../datasets/prepared/telco2",
+        data_path="../../datasets/original_datasets/bank.csv",
+        dataset="bank",
+        out_dir="../../datasets/prepared/bank",
     )
 

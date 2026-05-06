@@ -312,3 +312,11 @@ def train(
         'val_recall':    val_recall,
         'temperature':   final_temp,
     }
+
+if __name__ == "__main__":
+    train(
+        train_path=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\mpmn_ready\train.npz",
+        val_path  =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\mpmn_ready\val.npz",
+        dataset   ="bank",
+        save_path =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\cold_start\telco2.pth",
+    )

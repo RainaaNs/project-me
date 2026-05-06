@@ -37,7 +37,7 @@ from models.non_cold_start_model import NonColdStartModel, route_feature_groups
 TRAIN_CONFIGS = {
     "telco1": {"pos_weight": 4.0, "lr": 0.001, "num_epochs": 20, "batch_size": 32},
     "telco2": {"pos_weight": 3.0, "lr": 0.001, "num_epochs": 20, "batch_size": 32},
-    "bank":    {"pos_weight": 3.0, "lr": 0.001, "num_epochs": 20, "batch_size": 32},
+    "bank":    {"pos_weight": 3.0, "lr": 0.001, "num_epochs": 40, "batch_size": 32},
 }
 
 DATASET_NAME_MAP = {
@@ -192,3 +192,11 @@ def train(
         'val_precision': val_precision,
         'val_recall':    val_recall,
     }
+
+if __name__ == "__main__":
+    train(
+        train_path=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\gatefuse_ready\train.csv",
+        val_path  =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\gatefuse_ready\val.csv",
+        dataset   ="telco2",
+        save_path =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\non_cold_start\telco2.pt",
+    )

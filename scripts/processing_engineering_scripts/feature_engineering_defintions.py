@@ -195,7 +195,7 @@ class ColdStartFeatureEngineer:
     def _get_config(self) -> dict:
         if "bank" in self.dataset_type:
             return self.bank_config
-        elif "telco_2" in self.dataset_type:
+        elif "telco2" in self.dataset_type:
             return self.telco2_config
         else:
             return self.telco1_config
@@ -405,7 +405,7 @@ class ColdStartFeatureEngineer:
 #   • CreditScore and EstimatedSalary live in Billing for bank (financial
 #     standing belongs with billing context — Profile stays demographic).
 #   • Point Earned in Usage (engagement signal).
-#   • Complain in Usage for bank (real raw column).
+#   • Complain in Usage for bank (real raw column).NOT ANYMORE
 #   • Number of Dependents (count) used for telco1; the redundant binary
 #     Dependents column is dropped.
 #   • Telco2 service columns are binary, not OHE — drastically reduces
@@ -459,7 +459,8 @@ class NonColdStartFeatureEngineer:
             ],
             "minmax": ["Satisfaction Score"],
             "passthrough_numeric": [
-                "NumOfProducts", "HasCrCard", "IsActiveMember", "Complain",
+                "NumOfProducts", "HasCrCard", "IsActiveMember", 
+                # "Complain",
             ],
             "group_layout": {
                 "Profile": [
@@ -470,7 +471,8 @@ class NonColdStartFeatureEngineer:
                 "Billing":  ["Balance", "EstimatedSalary", "CreditScore"],
                 "Usage": [
                     "NumOfProducts", "HasCrCard", "IsActiveMember",
-                    "Complain", "Point Earned",
+                    # "Complain",
+                      "Point Earned",
                 ],
             },
         }
