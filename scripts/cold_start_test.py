@@ -32,8 +32,8 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, confusion_matrix
 )
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-from models import MPMN, DATASET_CONFIGS
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from models.cold_start_model import MPMN, DATASET_CONFIGS
 
 # Import EpisodeDataset from cold_start_train to avoid duplication
 sys.path.append(os.path.dirname(__file__))
@@ -198,3 +198,53 @@ def test(
         result["predicted_proba"] = mean_probs
 
     return result
+
+
+if __name__ == "__main__":
+    datasets = [
+        {
+            "test_path": "../datasets/processed/telco1/mpmn_ready/test.npz",
+            "train_path": "../datasets/processed/telco1/mpmn_ready/train_augmented.npz",
+            "feat_path": "../datasets/processed/telco1/mpmn_ready/feature_names.json",
+            "dataset": "telco1",
+            "model_path": "../models/mpmn_telco1.pth",
+        },
+        {
+            "test_path": "../datasets/processed/telco2/mpmn_ready/test.npz",
+            "train_path": "../datasets/processed/telco2/mpmn_ready/train_augmented.npz",
+            "feat_path": "../datasets/processed/telco2/mpmn_ready/feature_names.json",
+            "dataset": "telco1",
+            "model_path": "../models/mpmn_telco2.pth",
+        },
+        {
+            "test_path": "../datasets/processed/bank/mpmn_ready/test.npz",
+            "train_path": "../datasets/processed/bank/mpmn_ready/train_augmented.npz",
+            "feat_path": "../datasets/processed/bank/mpmn_ready/feature_names.json",
+            "dataset": "bank",
+            "model_path": "../models/mpmn_bank.pth",
+        },
+    ]
+
+    import json
+
+    for ds in datasets:
+        # Load feature names
+        with open(ds["feat_path"]) as f:
+            feat_names = json.load(f)
+
+        # Load test data
+        test_d = np.load(ds["test_path"])
+        test_df = pd.DataFrame(test_d["X"], columns=feat_names)
+        test_df["Churn"] = test_d["y"].astype(int)
+
+        # Load train (support pool)
+        train_d = np.load(ds["train_path"])
+        train_df = pd.DataFrame(train_d["X"], columns=feat_names)
+        train_df["Churn"] = train_d["y"].astype(int)
+
+        test(
+            df=test_df,
+            dataset=ds["dataset"],
+            model_path=ds["model_path"],
+            support_df=train_df,
+        )

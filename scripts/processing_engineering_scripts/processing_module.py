@@ -16,7 +16,7 @@ class MinimalPreprocessor:
     Changes from v1:
     - [CRITICAL] Added 'Complain' to leakage_columns (near-deterministic of churn in Bank).
     - [CRITICAL] Added Telco 1 redundant binary columns to drop list:
-        'Under 30', 'Senior Citizen', 'Referred a Friend'
+        'Under 30', 'Senior Citizen', 'Dependents', 'Referred a Friend'
     - [CRITICAL] Added post-hoc Telco 1 columns: 'Churn Score', 'CLTV', 'Total Revenue'
     - [MEDIUM]   Added geo noise columns for Telco 1: 'Country', 'State', 'City',
                  'Zip Code', 'Population'
@@ -58,8 +58,8 @@ class MinimalPreprocessor:
         self.redundant_columns = [
             "Under 30",  # = (Age < 30) — exact match
             "Senior Citizen",  # = (Age >= 65) — exact match
-            # "Dependents",      # = (Number of Dependents > 0) — kept, used in Telco_2
-            # "Referred a Friend", # = (Number of Referrals > 0) — exact match
+            "Dependents",  # = (Number of Dependents > 0) — exact match
+            "Referred a Friend",  # = (Number of Referrals > 0) — exact match
             "Total Revenue",  # ≈ Total Charges − Total Refunds (r=0.97)
         ]
 
@@ -126,6 +126,8 @@ class MinimalPreprocessor:
             df_clean["TotalCharges"] = df_clean["TotalCharges"].fillna(0.0)
 
         # ── 4. Structural Imputation: Internet Type ───────────────────────────
+        # When Internet Service = 'No', Internet Type is structurally null.
+        # Filling with 'No Internet Service' makes this an informative category.
         if (
             "Internet Type" in df_clean.columns
             and "Internet Service" in df_clean.columns
@@ -399,9 +401,12 @@ class DataRouter:
         print("STRATIFIED TRAIN / VAL / TEST SPLIT  (70 / 15 / 15)")
         print("=" * 70)
 
+        # Build a combined stratification key: "<Churn>_<is_cold_start>"
+        # e.g. "Yes_1", "No_0" — four possible strata
         churn_col = self.target_column
         strat_key = df[churn_col].astype(str) + "_" + df["is_cold_start"].astype(str)
 
+        # Step 1: split off test set
         df_trainval, df_test = train_test_split(
             df,
             test_size=test_size,
@@ -409,6 +414,8 @@ class DataRouter:
             random_state=random_state,
         )
 
+        # Step 2: split train vs val from the remaining trainval portion
+        # val_size relative to the full dataset, so relative to trainval it is:
         val_relative = val_size / (train_size + val_size)
         strat_key_trainval = (
             df_trainval[churn_col].astype(str)
@@ -422,6 +429,7 @@ class DataRouter:
             random_state=random_state,
         )
 
+        # ── Report ────────────────────────────────────────────────────────────
         def _report(name, d):
             n_c = d["is_cold_start"].sum()
             cr_cold = self._get_churn_rate(d[d["is_cold_start"] == 1])

@@ -1,5 +1,6 @@
 """
-prepare_data.py — Steps 1–3: Clean → Detect Cold-Start → Route & Split
+This is the first step, this where we did the minimum processing
+Clean → Detect Cold-Start → Route & Split
 
 Runs the full preprocessing pipeline on a raw dataset and produces
 three output CSVs: train.csv, val.csv, test.csv — each containing all
@@ -37,7 +38,6 @@ import json
 import os
 import sys
 import pandas as pd
-
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import from the cold-start project's processing module.
@@ -62,8 +62,8 @@ DATASET_CONFIGS = {
         "target_col":       "Churn",
         "strategy":         "generic",
         "tenure_col":       "tenure",
-        "referral_col":     "referrals",   # not present — detector handles gracefully
-        "offer_col":        "offer",       # not present — detector handles gracefully
+        "referral_col":     "referrals",  
+        "offer_col":        "offer",       
         "contract_col":     "Contract",
         "total_charges_col":"TotalCharges",
         "routing_columns":  ["tenure"],
@@ -93,7 +93,7 @@ def run(data_path: str, dataset: str, out_dir: str):
     cfg = DATASET_CONFIGS[dataset]
 
     print(f"\n{'='*70}")
-    print(f"  PREPARE DATA — {dataset}")
+    print(f"  PREPARE DATA  {dataset}")
     print(f"{'='*70}\n")
 
     os.makedirs(out_dir, exist_ok=True)
@@ -147,10 +147,50 @@ def run(data_path: str, dataset: str, out_dir: str):
     return splits
 
 
-if __name__ == "__main__":
-    run(
-        data_path="../../datasets/original_datasets/telco2.csv",
-        dataset="telco2",
-        out_dir="../../datasets/prepared/telco2",
-    )
+def run_with_logging(data_path: str, dataset: str, out_dir: str):
+    """Wraps run() and redirects stdout to a per-dataset log file."""
+    os.makedirs(out_dir, exist_ok=True)
+    log_path = os.path.join(out_dir, "prepare_log.txt")
 
+    with open(log_path, "w") as log_file:
+        # Temporarily redirect stdout to the log file
+        original_stdout = sys.stdout
+        sys.stdout = log_file
+        try:
+            result = run(data_path, dataset, out_dir)
+        finally:
+            # Always restore stdout even if run() crashes
+            sys.stdout = original_stdout
+
+    print(f"✓ {dataset} done — log saved to {log_path}")
+    return result
+
+
+
+
+
+if __name__ == "__main__":
+    datasets = [
+        {
+            "data_path": "../../datasets/original_datasets/telco1.csv",
+            "dataset": "telco1",
+            "out_dir": "../../datasets/prepared/telco1",
+        },
+        {
+            "data_path": "../../datasets/original_datasets/telco2.csv",
+            "dataset": "telco2",
+            "out_dir": "../../datasets/prepared/telco2",
+        },
+        {
+            "data_path": "../../datasets/original_datasets/bank.csv",
+            "dataset": "bank",
+            "out_dir": "../../datasets/prepared/bank",
+        },
+    ]
+
+    for ds in datasets:
+        run(
+            data_path=ds["data_path"],
+            dataset=ds["dataset"],
+            out_dir=ds["out_dir"],
+        )

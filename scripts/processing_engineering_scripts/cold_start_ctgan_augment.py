@@ -308,10 +308,28 @@ def run(dataset: str, mpmn_dir: str, model_dir: str):
     print(f"{'='*60}\n")
 
 
-# Replace with your directory paths before running.
 if __name__ == "__main__":
-    run(
-        dataset="bank",
-        mpmn_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\bank\mpmn_ready",
-        model_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\ctgan",
-    )
+    datasets = [
+        {
+            "dataset": "bank",
+            "mpmn_dir": "../../datasets/processed/bank/mpmn_ready",
+            "model_dir": "../../models/ctgan",
+        },
+        {
+            "dataset": "telco1",
+            "mpmn_dir": "../../datasets/processed/telco1/mpmn_ready",
+            "model_dir": "../../models/ctgan",
+        },
+        {
+            "dataset": "telco2",
+            "mpmn_dir": "../../datasets/processed/telco2/mpmn_ready",
+            "model_dir": "../../models/ctgan",
+        },
+    ]
+
+    for ds in datasets:
+        run(
+            dataset=ds["dataset"],
+            mpmn_dir=ds["mpmn_dir"],
+            model_dir=ds["model_dir"],
+        )
