@@ -4,6 +4,10 @@
   "gender",
   "SeniorCitizen",
   "Partner",
+<<<<<<< HEAD
+=======
+  "Dependents",
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
   "PhoneService",
   "PaperlessBilling",
   "Contract",

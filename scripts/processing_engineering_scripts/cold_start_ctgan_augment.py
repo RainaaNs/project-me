@@ -309,6 +309,7 @@ def run(dataset: str, mpmn_dir: str, model_dir: str):
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     datasets = [
         {
             "dataset": "bank",
@@ -333,3 +334,10 @@ if __name__ == "__main__":
             mpmn_dir=ds["mpmn_dir"],
             model_dir=ds["model_dir"],
         )
+=======
+    run(
+        dataset="telco2",
+        mpmn_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\mpmn_ready",
+        model_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\ctgan",
+    )
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045

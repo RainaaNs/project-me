@@ -10,7 +10,7 @@ model-ready outputs for both paths:
         - Saves numpy arrays as .npz files → data/mpmn_ready/
 
     4b. Non-Cold-Start path (GATEFuse)
-        - Fits EstablishedFeatureEngineer on non-cold-start TRAINING data
+        - Fits NonColdStartFeatureEngineer on non-cold-start TRAINING data
         - Transforms non-cold-start train/val/test rows
         - Saves CSVs with named columns → data/gatefuse_ready/
         - Saves groups.json (feature group → column index mapping)
@@ -63,15 +63,20 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+<<<<<<< HEAD
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 from feature_engineering_defintions import (
     ColdStartFeatureEngineer,
     EstablishedFeatureEngineer,
 )
+=======
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+from feature_engineering_defintions import ColdStartFeatureEngineer, NonColdStartFeatureEngineer
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
 
 
 # ── Dataset type mapping ──────────────────────────────────────────────────────
-# ColdStartFeatureEngineer and EstablishedFeatureEngineer use dataset_type
+# ColdStartFeatureEngineer and NonColdStartFeatureEngineer use dataset_type
 # strings internally to select their per-dataset configs.
 DATASET_TYPE_MAP = {
     "telco1": "telco1",
@@ -176,9 +181,13 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
     print(f"  STEP 4b — Non-Cold-Start Feature Engineering (GATEFuse path)")
     print(f"{'─' * 70}\n")
 
+<<<<<<< HEAD
     est_engineer = EstablishedFeatureEngineer(
         dataset_type=dataset_type, scalers_dir=out_dir
     )
+=======
+    est_engineer = NonColdStartFeatureEngineer(dataset_type=dataset_type)
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
 
     # Fit and transform training data
     print(

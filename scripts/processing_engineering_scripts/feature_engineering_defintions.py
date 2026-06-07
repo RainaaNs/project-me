@@ -241,7 +241,11 @@ class ColdStartFeatureEngineer:
     def _get_config(self) -> dict:
         if "bank" in self.dataset_type:
             return self.bank_config
+<<<<<<< HEAD
         elif "telco_2" in self.dataset_type or "telco2" in self.dataset_type:
+=======
+        elif "telco2" in self.dataset_type:
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
             return self.telco2_config
         else:
             return self.telco1_config
@@ -432,6 +436,7 @@ class ColdStartFeatureEngineer:
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. ESTABLISHED FEATURE ENGINEER  (GATEFuse Path)
 # ─────────────────────────────────────────────────────────────────────────────
+<<<<<<< HEAD
 
 # ---------------------------------------------------------------------------
 # Dataset-specific configuration
@@ -555,6 +560,35 @@ DATASET_CONFIG = {
         "scalers_subdir": "telco2_scalers",
     },
 }
+=======
+#
+# Aligned with feature_engineering_non_cold.ipynb (the notebook that produced
+# the strong baseline) and with the user's group structure that worked well.
+#
+# Encoding rules:
+#   • Card Type    → ordinal (Silver=1, Gold=2, Platinum=3, Diamond=4),
+#                    single column, NOT one-hot encoded.
+#   • Service cols → single binary column (Yes=1, No=0, "No internet service"=0,
+#                    "No phone service"=0). Eligibility is already captured by
+#                    Internet Service / Phone Service columns.
+#   • Nominal OHE  → drop_first=True for telco1/telco2 (cleaner, no dummy trap).
+#                    Bank Geography keeps drop_first=False (matches downstream
+#                    model groups expecting all three dummies).
+#   • Continuous   → StandardScaler. No log1p.
+#   • Bounded      → MinMaxScaler (Satisfaction Score only).
+#   • Tenure       → StandardScaler for all three datasets.
+#   • No has_zero_balance feature.
+#
+# Group structure follows the user's previous setup, with these refinements:
+#   • CreditScore and EstimatedSalary live in Billing for bank (financial
+#     standing belongs with billing context — Profile stays demographic).
+#   • Point Earned in Usage (engagement signal).
+#   • Complain in Usage for bank (real raw column).NOT ANYMORE
+#   • Number of Dependents (count) used for telco1; the redundant binary
+#     Dependents column is dropped.
+#   • Telco2 service columns are binary, not OHE — drastically reduces
+#     redundancy in the Usage group and balances group sizes.
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
 
 
 # ---------------------------------------------------------------------------
@@ -722,8 +756,39 @@ class EstablishedFeatureEngineer:
     # Internal helpers
     # ------------------------------------------------------------------
 
+<<<<<<< HEAD
     def _scalers_subdir(self) -> str:
         return os.path.join(self.scalers_dir, self._cfg["scalers_subdir"])
+=======
+        self.bank_config = {
+            "binary":  ["Gender"],
+            "ordinal": ["Card Type"],
+            "ohe":     ["Geography"],
+            "ohe_drop_first": {"Geography": False},   # match downstream model groups
+            "standard": [
+                "CreditScore", "Age", "Tenure", "Balance",
+                "EstimatedSalary", "Point Earned",
+            ],
+            "minmax": ["Satisfaction Score"],
+            "passthrough_numeric": [
+                "NumOfProducts", "HasCrCard", "IsActiveMember", 
+                # "Complain",
+            ],
+            "group_layout": {
+                "Profile": [
+                    "Geography_Germany", "Geography_Spain", "Geography_France",
+                    "Gender", "Age", "Satisfaction Score",
+                ],
+                "Contract": ["Tenure", "Card Type"],
+                "Billing":  ["Balance", "EstimatedSalary", "CreditScore"],
+                "Usage": [
+                    "NumOfProducts", "HasCrCard", "IsActiveMember",
+                    # "Complain",
+                      "Point Earned",
+                ],
+            },
+        }
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
 
     def _save(self, obj, filename: str):
         path = os.path.join(self._scalers_subdir(), filename)

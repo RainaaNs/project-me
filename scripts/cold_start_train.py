@@ -359,6 +359,7 @@ def train(
     print(f"[CS-Train] Model saved → {save_path}\n")
 
     return {
+<<<<<<< HEAD
         "val_auc": val_auc,
         "val_f1": val_f1,
         "val_accuracy": val_accuracy,
@@ -397,3 +398,20 @@ if __name__ == "__main__":
             dataset=ds["dataset"],
             save_path=ds["save_path"],
         )
+=======
+        'val_auc':       val_auc,
+        'val_f1':        val_f1,
+        'val_accuracy':  val_accuracy,
+        'val_precision': val_precision,
+        'val_recall':    val_recall,
+        'temperature':   final_temp,
+    }
+
+if __name__ == "__main__":
+    train(
+        train_path=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\mpmn_ready\train.npz",
+        val_path  =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\mpmn_ready\val.npz",
+        dataset   ="bank",
+        save_path =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\cold_start\telco2.pth",
+    )
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045

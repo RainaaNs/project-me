@@ -3,9 +3,26 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+<<<<<<< HEAD
 # ─────────────────────────────────────────────
 # Feature Group Definitions
 # ─────────────────────────────────────────────
+=======
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE GROUPS
+# ─────────────────────────────────────────────────────────────────────────────
+# Column names match the gatefuse_ready CSV output produced by
+# NonColdStartFeatureEngineer.group_layout exactly.
+#
+
+# Group sizes (excluding Churn):
+#   bank   : Profile=6  Contract=2  Billing=3   Usage=4    →  15 features
+#   telco1 : Profile=5  Contract=8  Billing=9   Usage=16   →  38 features
+#   telco2 : Profile=4  Contract=3  Billing=6   Usage=10   →  23 features
+#
+# If a name here doesn't match an output column from the engineer, training
+# will fail with a "Feature mismatch" error. Keep these two files in lockstep.
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
 
 FEATURE_GROUPS = {
     "bank": {
@@ -23,7 +40,7 @@ FEATURE_GROUPS = {
             "NumOfProducts",
             "HasCrCard",
             "IsActiveMember",
-            "Complain",
+            # "Complain",
             "Point Earned",
         ],
     },

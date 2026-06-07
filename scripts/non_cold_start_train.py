@@ -29,9 +29,25 @@ LR = 0.001
 DROP_COLS = ["Churn", "is_cold_start"]
 
 
+<<<<<<< HEAD
 # ─────────────────────────────────────────────
 # Helper: load CSV and drop non-feature columns
 # ─────────────────────────────────────────────
+=======
+# ── Per-dataset training configs ──────────────────────────────────────────────
+TRAIN_CONFIGS = {
+    "telco1": {"pos_weight": 4.0, "lr": 0.001, "num_epochs": 20, "batch_size": 32},
+    "telco2": {"pos_weight": 3.0, "lr": 0.001, "num_epochs": 20, "batch_size": 32},
+    "bank":    {"pos_weight": 3.0, "lr": 0.001, "num_epochs": 40, "batch_size": 32},
+}
+
+DATASET_NAME_MAP = {
+    "telco1": "telco1",
+    "telco2": "telco2",
+    "bank":    "bank",
+}
+# ─────────────────────────────────────────────────────────────────────────────
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
 
 
 def load_data(dataset_name, split):
@@ -158,6 +174,24 @@ for dataset_name in DATASETS:
     print(f"  AUC: {roc_auc_score(df_val['Churn'].values, val_probs):.4f}")
     print()
 
+<<<<<<< HEAD
 print("=" * 60)
 print("  ALL DATASETS COMPLETE")
 print("=" * 60)
+=======
+    return {
+        'val_auc':       val_auc,
+        'val_f1':        val_f1,
+        'val_accuracy':  val_accuracy,
+        'val_precision': val_precision,
+        'val_recall':    val_recall,
+    }
+
+if __name__ == "__main__":
+    train(
+        train_path=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\gatefuse_ready\train.csv",
+        val_path  =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\gatefuse_ready\val.csv",
+        dataset   ="telco2",
+        save_path =r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\non_cold_start\telco2.pt",
+    )
+>>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
