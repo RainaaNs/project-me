@@ -213,7 +213,7 @@ if __name__ == "__main__":
             "test_path": "../datasets/processed/telco2/mpmn_ready/test.npz",
             "train_path": "../datasets/processed/telco2/mpmn_ready/train_augmented.npz",
             "feat_path": "../datasets/processed/telco2/mpmn_ready/feature_names.json",
-            "dataset": "telco1",
+            "dataset": "telco2",
             "model_path": "../models/mpmn_telco2.pth",
         },
         {

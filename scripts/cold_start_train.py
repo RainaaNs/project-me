@@ -377,7 +377,7 @@ if __name__ == "__main__":
             "save_path": "../models/mpmn_telco1.pth",
         },
         {
-            "train_path": "../datasets/processed/telco2/mpmn_ready/train_augmented.npz",
+            "train_path": "../datasets/processed/telco2/mpmn_ready/train.npz",
             "val_path": "../datasets/processed/telco2/mpmn_ready/val.npz",
             "dataset": "telco2",
             "save_path": "../models/mpmn_telco2.pth",
