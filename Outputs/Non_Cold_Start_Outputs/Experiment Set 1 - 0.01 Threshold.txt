@@ -1,0 +1,667 @@
+(social_media_mining_env) PS C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\scripts\processing_engineering_scripts\Experiment_Set_1> python feature_engineering_targ_corr_threshold.py
+
+======================================================================
+  FEATURE ENGINEERING — bank
+======================================================================
+
+[FE] Loaded splits — Train: 7000 | Val: 1500 | Test: 1500
+[FE] Cold-start counts — Train: 1171 | Val: 251 | Test: 251
+
+──────────────────────────────────────────────────────────────────────
+  STEP 4a — Cold-Start Feature Engineering (MPMN path)
+──────────────────────────────────────────────────────────────────────
+
+[CS-FE] Fitting on 5829 non-cold-start training samples...
+   Fitting Cold-Start Engineer (bank)...
+      - Fit complete on 5829 non-cold samples.
+[CS-FE] Saved train.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\mpmn_ready\train.npz  (shape: (1171, 16), churn rate: 24.9%)
+[CS-FE] Saved val.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\mpmn_ready\val.npz  (shape: (251, 16), churn rate: 25.1%)
+[CS-FE] Saved test.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\mpmn_ready\test.npz  (shape: (251, 16), churn rate: 24.7%)
+[CS-FE] Feature names → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\mpmn_ready\feature_names.json
+[CS-FE] Total features: 16
+
+[CS-FE] Feature list:
+          1. CreditScore
+          2. Age
+          3. Balance
+          4. EstimatedSalary
+          5. Point Earned
+          6. Tenure
+          7. HasCrCard
+          8. IsActiveMember
+          9. Gender
+         10. Geography_Germany
+         11. Geography_Spain
+         12. Card Type_GOLD
+         13. Card Type_PLATINUM
+         14. Card Type_SILVER
+         15. has_zero_balance
+         16. NumOfProducts
+
+──────────────────────────────────────────────────────────────────────
+  STEP 4b — Non-Cold-Start Feature Engineering (GATEFuse path)
+──────────────────────────────────────────────────────────────────────
+
+[NCS-FE] Fitting on 5829 non-cold-start training samples...
+   [Corr filter] threshold=0.01 — dropping 9 features:
+     - Age  (|r|=0.0064)
+     - Tenure  (|r|=0.0021)
+     - HasCrCard  (|r|=0.0014)
+     - IsActiveMember  (|r|=0.0023)
+     - EstimatedSalary  (|r|=0.0025)
+     - Complain  (|r|=0.0049)
+     - Satisfaction Score  (|r|=0.0072)
+     - Card Type  (|r|=0.0007)
+     - Geography_Spain  (|r|=0.0043)
+[bank] fit_transform complete.
+   Shape          : (5829, 7)
+   Corr threshold : 0.01
+[NCS-FE] Saved train.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\gatefuse_ready\train.csv  (shape: (5829, 7), churn rate: 19.5%)
+[NCS-FE] Saved val.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\gatefuse_ready\val.csv  (shape: (1249, 7), churn rate: 19.5%)
+[NCS-FE] Saved test.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\gatefuse_ready\test.csv  (shape: (1249, 7), churn rate: 19.5%)
+[NCS-FE] Total features: 7
+
+[NCS-FE] Feature list:
+           1. CreditScore
+           2. Gender
+           3. Balance
+           4. NumOfProducts
+           5. Point Earned
+           6. Geography_France
+           7. Geography_Germany
+
+======================================================================
+  FEATURE ENGINEERING COMPLETE - bank
+  MPMN ready    : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\mpmn_ready
+  GATEFuse ready: C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\bank\gatefuse_ready
+======================================================================
+
+
+======================================================================
+  FEATURE ENGINEERING — telco1
+======================================================================
+
+[FE] Loaded splits — Train: 4929 | Val: 1057 | Test: 1057
+[FE] Cold-start counts — Train: 584 | Val: 125 | Test: 125
+
+──────────────────────────────────────────────────────────────────────
+  STEP 4a — Cold-Start Feature Engineering (MPMN path)
+──────────────────────────────────────────────────────────────────────
+
+[CS-FE] Fitting on 4345 non-cold-start training samples...
+   Fitting Cold-Start Engineer (telco1)...
+      - Dropping highly correlated cols: ['Internet Service_Yes']
+      - Fit complete on 4345 non-cold samples.
+[CS-FE] Saved train.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\mpmn_ready\train.npz  (shape: (584, 40), churn rate: 60.1%)
+[CS-FE] Saved val.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\mpmn_ready\val.npz  (shape: (125, 40), churn rate: 60.0%)
+[CS-FE] Saved test.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\mpmn_ready\test.npz  (shape: (125, 40), churn rate: 60.0%)
+[CS-FE] Feature names → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\mpmn_ready\feature_names.json
+[CS-FE] Total features: 40
+
+[CS-FE] Feature list:
+          1. Age
+          2. Number of Dependents
+          3. Number of Referrals
+          4. Avg Monthly Long Distance Charges
+          5. Avg Monthly GB Download
+          6. Monthly Charge
+          7. Tenure in Months
+          8. Gender
+          9. Married
+         10. Phone Service
+         11. Paperless Billing
+         12. Contract
+         13. Offer_Offer A
+         14. Offer_Offer B
+         15. Offer_Offer C
+         16. Offer_Offer D
+         17. Offer_Offer E
+         18. Internet Type_DSL
+         19. Internet Type_Fiber Optic
+         20. Internet Type_No Internet Service
+         21. Payment Method_Credit Card
+         22. Payment Method_Mailed Check
+         23. has_multiple_lines
+         24. no_svc_multiple_lines
+         25. has_online_security
+         26. no_svc_online_security
+         27. has_online_backup
+         28. no_svc_online_backup
+         29. has_device_protection_plan
+         30. no_svc_device_protection_plan
+         31. has_premium_tech_support
+         32. no_svc_premium_tech_support
+         33. has_streaming_tv
+         34. no_svc_streaming_tv
+         35. has_streaming_movies
+         36. no_svc_streaming_movies
+         37. has_streaming_music
+         38. no_svc_streaming_music
+         39. has_unlimited_data
+         40. no_svc_unlimited_data
+
+──────────────────────────────────────────────────────────────────────
+  STEP 4b — Non-Cold-Start Feature Engineering (GATEFuse path)
+──────────────────────────────────────────────────────────────────────
+
+[NCS-FE] Fitting on 4345 non-cold-start training samples...
+   [Corr filter] threshold=0.01 — dropping 24 features:
+     - Dependents  (|r|=0.0056)
+     - Number of Referrals  (|r|=0.0083)
+     - Avg Monthly Long Distance Charges  (|r|=0.0045)
+     - Multiple Lines  (|r|=0.0040)
+     - Avg Monthly GB Download  (|r|=0.0013)
+     - Online Backup  (|r|=0.0041)
+     - Premium Tech Support  (|r|=0.0050)
+     - Streaming TV  (|r|=0.0019)
+     - Streaming Movies  (|r|=0.0062)
+     - Paperless Billing  (|r|=0.0036)
+     - Monthly Charge  (|r|=0.0036)
+     - Total Charges  (|r|=0.0087)
+     - Total Refunds  (|r|=0.0096)
+     - Total Extra Data Charges  (|r|=0.0055)
+     - Total Long Distance Charges  (|r|=0.0090)
+     - Total Revenue  (|r|=0.0097)
+     - Offer_Offer A  (|r|=0.0093)
+     - Offer_Offer E  (|r|=0.0089)
+     - Internet Type_Fiber Optic  (|r|=0.0010)
+     - Contract_One Year  (|r|=0.0090)
+     - Contract_Two Year  (|r|=0.0034)
+     - Payment Method_Bank Withdrawal  (|r|=0.0007)
+     - Payment Method_Credit Card  (|r|=0.0047)
+     - Payment Method_Mailed Check  (|r|=0.0100)
+[telco1] fit_transform complete.
+   Shape          : (4345, 26)
+   Corr threshold : 0.01
+[NCS-FE] Saved train.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\gatefuse_ready\train.csv  (shape: (4345, 26), churn rate: 22.0%)
+[NCS-FE] Saved val.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\gatefuse_ready\val.csv  (shape: (932, 26), churn rate: 22.0%)
+[NCS-FE] Saved test.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\gatefuse_ready\test.csv  (shape: (932, 26), churn rate: 22.0%)
+[NCS-FE] Total features: 26
+
+[NCS-FE] Feature list:
+           1. Gender
+           2. Age
+           3. Under 30
+           4. Senior Citizen
+           5. Married
+           6. Number of Dependents
+           7. Latitude
+           8. Longitude
+           9. Population
+          10. Referred a Friend
+          11. Tenure in Months
+          12. Phone Service
+          13. Internet Service
+          14. Online Security
+          15. Device Protection Plan
+          16. Streaming Music
+          17. Unlimited Data
+          18. Satisfaction Score
+          19. Offer_No Offer
+          20. Offer_Offer B
+          21. Offer_Offer C
+          22. Offer_Offer D
+          23. Internet Type_Cable
+          24. Internet Type_DSL
+          25. Internet Type_No Internet Service
+          26. Contract_Month-to-Month
+
+======================================================================
+  FEATURE ENGINEERING COMPLETE - telco1
+  MPMN ready    : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\mpmn_ready
+  GATEFuse ready: C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco1\gatefuse_ready
+======================================================================
+
+
+======================================================================
+  FEATURE ENGINEERING — telco2
+======================================================================
+
+[FE] Loaded splits — Train: 4929 | Val: 1057 | Test: 1057
+[FE] Cold-start counts — Train: 436 | Val: 94 | Test: 94
+
+──────────────────────────────────────────────────────────────────────
+  STEP 4a — Cold-Start Feature Engineering (MPMN path)
+──────────────────────────────────────────────────────────────────────
+
+[CS-FE] Fitting on 4493 non-cold-start training samples...
+   Fitting Cold-Start Engineer (telco2)...
+      - Dropping highly correlated cols: ['no_svc_multiplelines', 'no_svc_onlinesecurity', 'no_svc_onlinebackup', 'no_svc_deviceprotection', 'no_svc_techsupport', 'no_svc_streamingtv', 'no_svc_streamingmovies']
+      - Fit complete on 4493 non-cold samples.
+[CS-FE] Saved train.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\mpmn_ready\train.npz  (shape: (436, 21), churn rate: 61.0%)
+[CS-FE] Saved val.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\mpmn_ready\val.npz  (shape: (94, 21), churn rate: 60.6%)
+[CS-FE] Saved test.npz → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\mpmn_ready\test.npz  (shape: (94, 21), churn rate: 60.6%)
+[CS-FE] Feature names → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\mpmn_ready\feature_names.json
+[CS-FE] Total features: 21
+
+[CS-FE] Feature list:
+          1. MonthlyCharges
+          2. tenure
+          3. gender
+          4. SeniorCitizen
+          5. Partner
+          6. Dependents
+          7. PhoneService
+          8. PaperlessBilling
+          9. Contract
+         10. InternetService_Fiber optic
+         11. InternetService_No
+         12. PaymentMethod_Credit card (automatic)
+         13. PaymentMethod_Electronic check
+         14. PaymentMethod_Mailed check
+         15. has_multiplelines
+         16. has_onlinesecurity
+         17. has_onlinebackup
+         18. has_deviceprotection
+         19. has_techsupport
+         20. has_streamingtv
+         21. has_streamingmovies
+
+──────────────────────────────────────────────────────────────────────
+  STEP 4b — Non-Cold-Start Feature Engineering (GATEFuse path)
+──────────────────────────────────────────────────────────────────────
+
+[NCS-FE] Fitting on 4493 non-cold-start training samples...
+   [Corr filter] threshold=0.01 — dropping 28 features:
+     - gender  (|r|=0.0021)
+     - Dependents  (|r|=0.0017)
+     - PhoneService  (|r|=0.0075)
+     - PaperlessBilling  (|r|=0.0033)
+     - TotalCharges  (|r|=0.0044)
+     - SeniorCitizen_0  (|r|=0.0096)
+     - SeniorCitizen_1  (|r|=0.0096)
+     - InternetService_No  (|r|=0.0036)
+     - Contract_Two year  (|r|=0.0042)
+     - PaymentMethod_Credit card (automatic)  (|r|=0.0016)
+     - PaymentMethod_Mailed check  (|r|=0.0027)
+     - OnlineSecurity_No internet service  (|r|=0.0036)
+     - TechSupport_No  (|r|=0.0021)
+     - TechSupport_No internet service  (|r|=0.0036)
+     - TechSupport_Yes  (|r|=0.0055)
+     - MultipleLines_No  (|r|=0.0059)
+     - MultipleLines_No phone service  (|r|=0.0075)
+     - MultipleLines_Yes  (|r|=0.0015)
+     - OnlineBackup_No  (|r|=0.0029)
+     - OnlineBackup_No internet service  (|r|=0.0036)
+     - OnlineBackup_Yes  (|r|=0.0060)
+     - DeviceProtection_No  (|r|=0.0006)
+     - DeviceProtection_No internet service  (|r|=0.0036)
+     - DeviceProtection_Yes  (|r|=0.0036)
+     - StreamingTV_No internet service  (|r|=0.0036)
+     - StreamingMovies_No  (|r|=0.0016)
+     - StreamingMovies_No internet service  (|r|=0.0036)
+     - StreamingMovies_Yes  (|r|=0.0014)
+[telco2] fit_transform complete.
+   Shape          : (4493, 13)
+[NCS-FE] Saved train.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\gatefuse_ready\train.csv  (shape: (4493, 13), churn rate: 23.2%)
+[NCS-FE] Saved val.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\gatefuse_ready\val.csv  (shape: (963, 13), churn rate: 23.2%)
+[NCS-FE] Saved test.csv → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\gatefuse_ready\test.csv  (shape: (963, 13), churn rate: 23.2%)
+[NCS-FE] Total features: 13
+[NCS-FE] Feature list:
+           1. Partner
+           2. tenure
+           3. MonthlyCharges
+           5. InternetService_Fiber optic
+           6. Contract_Month-to-month
+           7. Contract_One year
+           8. PaymentMethod_Bank transfer (automatic)
+           9. PaymentMethod_Electronic check
+          10. OnlineSecurity_No
+          11. OnlineSecurity_Yes
+          12. StreamingTV_No
+          13. StreamingTV_Yes
+
+======================================================================
+  FEATURE ENGINEERING COMPLETE - telco2
+  MPMN ready    : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\mpmn_ready
+  GATEFuse ready: C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project\datasets\processed\target_corr_threshold\telco2\gatefuse_ready
+======================================================================
+
+
+
+
+
+
+
+
+
+
+TRAINING-----------------------------------------------------------------
+(social_media_mining_env) PS C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project> python scripts\processing_engineering_scripts\Experiment_Set_1\non_cold_start_train_targ_corr_threshold.py
+
+[GATEFuse] Dataset    : bank
+[GATEFuse] Train path : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/datasets/processed/target_corr_threshold/bank/gatefuse_ready/train.csv
+[GATEFuse] Save path  : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold/bank_non_cold_start.pt
+[GATEFuse] Epochs     : 40 | LR: 0.001 | Batch: 32
+
+  [Groups] {'Profile': 4, 'Contract': 0, 'Billing': 2, 'Usage': 1}
+  [Groups] {'Profile': 4, 'Contract': 0, 'Billing': 2, 'Usage': 1}
+[GATEFuse] Feature columns : 7
+[GATEFuse] Group sizes     : {'Profile': 4, 'Contract': 0, 'Billing': 2, 'Usage': 1}
+[GATEFuse] Train samples   : 5829 | Val: 1249
+
+C:\Users\T-Plug\anaconda3\envs\social_media_mining_env\Lib\site-packages\torch\nn\init.py:582: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+  Epoch 01/40 | Loss: 0.5088 | Train Acc: 80.61%
+  Epoch 02/40 | Loss: 0.4306 | Train Acc: 82.47%
+  Epoch 03/40 | Loss: 0.4172 | Train Acc: 82.48%
+  Epoch 04/40 | Loss: 0.4085 | Train Acc: 82.76%
+  Epoch 05/40 | Loss: 0.4045 | Train Acc: 82.66%
+    --> Val Loss: 0.3990 | Val Acc: 83.59%
+  Epoch 06/40 | Loss: 0.4027 | Train Acc: 82.76%
+  Epoch 07/40 | Loss: 0.4021 | Train Acc: 82.81%
+  Epoch 08/40 | Loss: 0.4004 | Train Acc: 82.91%
+  Epoch 09/40 | Loss: 0.4006 | Train Acc: 82.86%
+  Epoch 10/40 | Loss: 0.3991 | Train Acc: 82.91%
+    --> Val Loss: 0.3862 | Val Acc: 83.35%
+  Epoch 11/40 | Loss: 0.3985 | Train Acc: 83.00%
+  Epoch 12/40 | Loss: 0.3985 | Train Acc: 82.95%
+  Epoch 13/40 | Loss: 0.3973 | Train Acc: 83.00%
+  Epoch 14/40 | Loss: 0.3969 | Train Acc: 83.00%
+  Epoch 15/40 | Loss: 0.3963 | Train Acc: 82.98%
+    --> Val Loss: 0.3823 | Val Acc: 83.35%
+  Epoch 16/40 | Loss: 0.3954 | Train Acc: 82.95%
+  Epoch 17/40 | Loss: 0.3952 | Train Acc: 82.93%
+  Epoch 18/40 | Loss: 0.3941 | Train Acc: 82.88%
+  Epoch 19/40 | Loss: 0.3935 | Train Acc: 83.15%
+  Epoch 20/40 | Loss: 0.3931 | Train Acc: 83.07%
+    --> Val Loss: 0.3798 | Val Acc: 83.35%
+  Epoch 21/40 | Loss: 0.3929 | Train Acc: 83.20%
+  Epoch 22/40 | Loss: 0.3922 | Train Acc: 83.26%
+  Epoch 23/40 | Loss: 0.3911 | Train Acc: 83.26%
+  Epoch 24/40 | Loss: 0.3903 | Train Acc: 83.34%
+  Epoch 25/40 | Loss: 0.3895 | Train Acc: 83.38%
+    --> Val Loss: 0.3800 | Val Acc: 83.11%
+  Epoch 26/40 | Loss: 0.3884 | Train Acc: 83.31%
+  Epoch 27/40 | Loss: 0.3871 | Train Acc: 83.50%
+  Epoch 28/40 | Loss: 0.3858 | Train Acc: 83.48%
+  Epoch 29/40 | Loss: 0.3857 | Train Acc: 83.50%
+  Epoch 30/40 | Loss: 0.3851 | Train Acc: 83.55%
+    --> Val Loss: 0.3814 | Val Acc: 83.27%
+  Epoch 31/40 | Loss: 0.3844 | Train Acc: 83.46%
+  Epoch 32/40 | Loss: 0.3837 | Train Acc: 83.48%
+  Epoch 33/40 | Loss: 0.3838 | Train Acc: 83.44%
+  Epoch 34/40 | Loss: 0.3824 | Train Acc: 83.62%
+  Epoch 35/40 | Loss: 0.3822 | Train Acc: 83.43%
+    --> Val Loss: 0.3849 | Val Acc: 82.79%
+  Epoch 36/40 | Loss: 0.3812 | Train Acc: 83.60%
+  Epoch 37/40 | Loss: 0.3808 | Train Acc: 83.55%
+  Epoch 38/40 | Loss: 0.3797 | Train Acc: 83.60%
+  Epoch 39/40 | Loss: 0.3793 | Train Acc: 83.67%
+  Epoch 40/40 | Loss: 0.3790 | Train Acc: 83.77%
+    --> Val Loss: 0.3932 | Val Acc: 82.87%
+
+[GATEFuse] Model saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold/bank_non_cold_start.pt
+
+[GATEFuse] Class distribution (val): Counter({np.int64(0): 1006, np.int64(1): 243})
+              precision    recall  f1-score   support
+
+    No Churn       0.85      0.96      0.90      1006
+       Churn       0.64      0.28      0.39       243
+
+    accuracy                           0.83      1249
+   macro avg       0.74      0.62      0.64      1249
+weighted avg       0.81      0.83      0.80      1249
+
+[GATEFuse] AUC       : 0.8118
+[GATEFuse] F1        : 0.3851
+[GATEFuse] Accuracy  : 0.8287
+[GATEFuse] Precision : 0.6381
+[GATEFuse] Recall    : 0.2757
+
+[GATEFuse] Dataset    : telco1
+[GATEFuse] Train path : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/datasets/processed/target_corr_threshold/telco1/gatefuse_ready/train.csv
+[GATEFuse] Save path  : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold/telco1_non_cold_start.pt
+[GATEFuse] Epochs     : 40 | LR: 0.001 | Batch: 32
+
+  [GROUP WARNING] 'Population' not matched by any rule → assigned to 'Usage'
+  [Groups] {'Profile': 9, 'Contract': 6, 'Billing': 0, 'Usage': 11}
+  [GROUP WARNING] 'Population' not matched by any rule → assigned to 'Usage'
+  [Groups] {'Profile': 9, 'Contract': 6, 'Billing': 0, 'Usage': 11}
+[GATEFuse] Feature columns : 26
+[GATEFuse] Group sizes     : {'Profile': 9, 'Contract': 6, 'Billing': 0, 'Usage': 11}
+[GATEFuse] Train samples   : 4345 | Val: 932
+
+C:\Users\T-Plug\anaconda3\envs\social_media_mining_env\Lib\site-packages\torch\nn\init.py:582: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+  Epoch 01/40 | Loss: 0.3274 | Train Acc: 80.81%
+  Epoch 02/40 | Loss: 0.1093 | Train Acc: 95.54%
+  Epoch 03/40 | Loss: 0.1016 | Train Acc: 95.83%
+  Epoch 04/40 | Loss: 0.0978 | Train Acc: 95.93%
+  Epoch 05/40 | Loss: 0.0954 | Train Acc: 96.02%
+    --> Val Loss: 0.1064 | Val Acc: 94.74%
+  Epoch 06/40 | Loss: 0.0933 | Train Acc: 96.04%
+  Epoch 07/40 | Loss: 0.0915 | Train Acc: 96.13%
+  Epoch 08/40 | Loss: 0.0897 | Train Acc: 96.27%
+  Epoch 09/40 | Loss: 0.0887 | Train Acc: 96.36%
+  Epoch 10/40 | Loss: 0.0873 | Train Acc: 96.36%
+    --> Val Loss: 0.1089 | Val Acc: 94.64%
+  Epoch 11/40 | Loss: 0.0862 | Train Acc: 96.34%
+  Epoch 12/40 | Loss: 0.0848 | Train Acc: 96.36%
+  Epoch 13/40 | Loss: 0.0833 | Train Acc: 96.46%
+  Epoch 14/40 | Loss: 0.0817 | Train Acc: 96.52%
+  Epoch 15/40 | Loss: 0.0808 | Train Acc: 96.69%
+    --> Val Loss: 0.1140 | Val Acc: 94.74%
+  Epoch 16/40 | Loss: 0.0791 | Train Acc: 96.78%
+  Epoch 17/40 | Loss: 0.0773 | Train Acc: 96.96%
+  Epoch 18/40 | Loss: 0.0761 | Train Acc: 97.03%
+  Epoch 19/40 | Loss: 0.0750 | Train Acc: 97.01%
+  Epoch 20/40 | Loss: 0.0732 | Train Acc: 97.05%
+    --> Val Loss: 0.1215 | Val Acc: 95.06%
+  Epoch 21/40 | Loss: 0.0725 | Train Acc: 97.03%
+  Epoch 22/40 | Loss: 0.0756 | Train Acc: 96.73%
+  Epoch 23/40 | Loss: 0.0741 | Train Acc: 96.87%
+  Epoch 24/40 | Loss: 0.0693 | Train Acc: 96.92%
+  Epoch 25/40 | Loss: 0.0668 | Train Acc: 97.05%
+    --> Val Loss: 0.1258 | Val Acc: 95.60%
+  Epoch 26/40 | Loss: 0.0680 | Train Acc: 96.85%
+  Epoch 27/40 | Loss: 0.0645 | Train Acc: 97.12%
+  Epoch 28/40 | Loss: 0.0624 | Train Acc: 97.19%
+  Epoch 29/40 | Loss: 0.0658 | Train Acc: 97.10%
+  Epoch 30/40 | Loss: 0.0596 | Train Acc: 97.31%
+    --> Val Loss: 0.1579 | Val Acc: 95.49%
+  Epoch 31/40 | Loss: 0.0633 | Train Acc: 97.38%
+  Epoch 32/40 | Loss: 0.0630 | Train Acc: 97.47%
+  Epoch 33/40 | Loss: 0.0574 | Train Acc: 97.56%
+  Epoch 34/40 | Loss: 0.0586 | Train Acc: 97.45%
+  Epoch 35/40 | Loss: 0.0529 | Train Acc: 97.56%
+    --> Val Loss: 0.3793 | Val Acc: 95.39%
+  Epoch 36/40 | Loss: 0.0514 | Train Acc: 97.79%
+  Epoch 37/40 | Loss: 0.0576 | Train Acc: 97.38%
+  Epoch 38/40 | Loss: 0.0591 | Train Acc: 97.40%
+  Epoch 39/40 | Loss: 0.0563 | Train Acc: 97.86%
+  Epoch 40/40 | Loss: 0.0668 | Train Acc: 97.22%
+    --> Val Loss: 0.1529 | Val Acc: 95.49%
+
+[GATEFuse] Model saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold/telco1_non_cold_start.pt
+
+[GATEFuse] Class distribution (val): Counter({np.int64(0): 727, np.int64(1): 205})
+              precision    recall  f1-score   support
+
+    No Churn       0.96      0.98      0.97       727
+       Churn       0.94      0.85      0.89       205
+
+    accuracy                           0.95       932
+   macro avg       0.95      0.92      0.93       932
+weighted avg       0.95      0.95      0.95       932
+
+[GATEFuse] AUC       : 0.9870
+[GATEFuse] F1        : 0.8923
+[GATEFuse] Accuracy  : 0.9549
+[GATEFuse] Precision : 0.9405
+[GATEFuse] Recall    : 0.8488
+
+[GATEFuse] Dataset    : telco2
+[GATEFuse] Train path : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/datasets/processed/target_corr_threshold/telco2/gatefuse_ready/train.csv
+[GATEFuse] Save path  : C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold/telco2_non_cold_start.pt
+[GATEFuse] Epochs     : 40 | LR: 0.001 | Batch: 32
+
+  [Groups] {'Profile': 1, 'Contract': 5, 'Billing': 3, 'Usage': 4}
+  [Groups] {'Profile': 1, 'Contract': 5, 'Billing': 3, 'Usage': 4}
+[GATEFuse] Feature columns : 13
+[GATEFuse] Group sizes     : {'Profile': 1, 'Contract': 5, 'Billing': 3, 'Usage': 4}
+[GATEFuse] Train samples   : 4493 | Val: 963
+
+  Epoch 01/40 | Loss: 0.4770 | Train Acc: 76.79%
+  Epoch 02/40 | Loss: 0.4225 | Train Acc: 78.95%
+  Epoch 03/40 | Loss: 0.4149 | Train Acc: 80.37%
+  Epoch 04/40 | Loss: 0.4119 | Train Acc: 80.48%
+  Epoch 05/40 | Loss: 0.4104 | Train Acc: 80.64%
+    --> Val Loss: 0.4032 | Val Acc: 81.00%
+  Epoch 06/40 | Loss: 0.4093 | Train Acc: 80.66%
+  Epoch 07/40 | Loss: 0.4082 | Train Acc: 80.61%
+  Epoch 08/40 | Loss: 0.4074 | Train Acc: 80.57%
+  Epoch 09/40 | Loss: 0.4066 | Train Acc: 80.64%
+  Epoch 10/40 | Loss: 0.4061 | Train Acc: 80.73%
+    --> Val Loss: 0.4018 | Val Acc: 81.20%
+  Epoch 11/40 | Loss: 0.4055 | Train Acc: 80.75%
+  Epoch 12/40 | Loss: 0.4052 | Train Acc: 80.75%
+  Epoch 13/40 | Loss: 0.4047 | Train Acc: 80.70%
+  Epoch 14/40 | Loss: 0.4044 | Train Acc: 80.73%
+  Epoch 15/40 | Loss: 0.4040 | Train Acc: 80.66%
+    --> Val Loss: 0.4013 | Val Acc: 81.31%
+  Epoch 16/40 | Loss: 0.4037 | Train Acc: 80.68%
+  Epoch 17/40 | Loss: 0.4035 | Train Acc: 80.75%
+  Epoch 18/40 | Loss: 0.4031 | Train Acc: 80.86%
+  Epoch 19/40 | Loss: 0.4029 | Train Acc: 80.88%
+  Epoch 20/40 | Loss: 0.4025 | Train Acc: 80.81%
+    --> Val Loss: 0.4012 | Val Acc: 81.52%
+  Epoch 21/40 | Loss: 0.4022 | Train Acc: 80.66%
+  Epoch 22/40 | Loss: 0.4019 | Train Acc: 80.68%
+  Epoch 23/40 | Loss: 0.4017 | Train Acc: 80.68%
+  Epoch 24/40 | Loss: 0.4015 | Train Acc: 80.81%
+  Epoch 25/40 | Loss: 0.4012 | Train Acc: 80.79%
+    --> Val Loss: 0.4009 | Val Acc: 81.41%
+  Epoch 26/40 | Loss: 0.4008 | Train Acc: 80.88%
+  Epoch 27/40 | Loss: 0.4004 | Train Acc: 80.81%
+  Epoch 28/40 | Loss: 0.4003 | Train Acc: 80.95%
+  Epoch 29/40 | Loss: 0.4000 | Train Acc: 80.97%
+  Epoch 30/40 | Loss: 0.3996 | Train Acc: 80.88%
+    --> Val Loss: 0.4014 | Val Acc: 81.31%
+  Epoch 31/40 | Loss: 0.3994 | Train Acc: 80.90%
+  Epoch 32/40 | Loss: 0.3992 | Train Acc: 81.08%
+  Epoch 33/40 | Loss: 0.3989 | Train Acc: 81.10%
+  Epoch 34/40 | Loss: 0.3985 | Train Acc: 81.26%
+  Epoch 35/40 | Loss: 0.3986 | Train Acc: 81.26%
+    --> Val Loss: 0.4012 | Val Acc: 81.10%
+  Epoch 36/40 | Loss: 0.3981 | Train Acc: 81.08%
+  Epoch 37/40 | Loss: 0.3978 | Train Acc: 81.13%
+  Epoch 38/40 | Loss: 0.3977 | Train Acc: 81.01%
+  Epoch 39/40 | Loss: 0.3973 | Train Acc: 81.10%
+  Epoch 40/40 | Loss: 0.3971 | Train Acc: 80.97%
+    --> Val Loss: 0.4017 | Val Acc: 80.89%
+
+[GATEFuse] Model saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold/telco2_non_cold_start.pt
+
+[GATEFuse] Class distribution (val): Counter({np.int64(0): 740, np.int64(1): 223})
+              precision    recall  f1-score   support
+
+    No Churn       0.86      0.89      0.88       740
+       Churn       0.60      0.52      0.56       223
+
+    accuracy                           0.81       963
+   macro avg       0.73      0.71      0.72       963
+weighted avg       0.80      0.81      0.80       963
+
+[GATEFuse] AUC       : 0.8410
+[GATEFuse] F1        : 0.5598
+[GATEFuse] Accuracy  : 0.8089
+[GATEFuse] Precision : 0.6000
+[GATEFuse] Recall    : 0.5247
+
+
+
+
+
+
+
+
+
+TESTING ------------------------------------------------------------------------------
+(social_media_mining_env) PS C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project> python scripts\processing_engineering_scripts\Experiment_Set_1\non_cold_start_test_targ_corr_threshold.py 
+============================================================
+  DATASET: bank  [target_corr_threshold]
+============================================================
+  [Groups] {'Profile': 4, 'Contract': 0, 'Billing': 2, 'Usage': 1}
+  Feature columns : 7
+  Group sizes     : {'Profile': 4, 'Contract': 0, 'Billing': 2, 'Usage': 1}
+  Test samples    : 1249
+  Class dist      : Counter({np.int64(0): 1006, np.int64(1): 243})
+
+C:\Users\T-Plug\anaconda3\envs\social_media_mining_env\Lib\site-packages\torch\nn\init.py:582: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+  Test Accuracy  : 0.8303
+  Test Precision : 0.6566
+  Test Recall    : 0.2675
+  Test F1 Score  : 0.3801
+  Test AUC       : 0.8023
+
+              precision    recall  f1-score   support
+
+    No Churn       0.85      0.97      0.90      1006
+       Churn       0.66      0.27      0.38       243
+
+    accuracy                           0.83      1249
+   macro avg       0.75      0.62      0.64      1249
+weighted avg       0.81      0.83      0.80      1249
+
+  Confusion matrix saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold\bank_cm_test.png
+
+============================================================
+  DATASET: telco1  [target_corr_threshold]
+============================================================
+  [GROUP WARNING] 'Population' not matched by any rule → assigned to 'Usage'
+  [Groups] {'Profile': 9, 'Contract': 6, 'Billing': 0, 'Usage': 11}
+  Feature columns : 26
+  Group sizes     : {'Profile': 9, 'Contract': 6, 'Billing': 0, 'Usage': 11}
+  Test samples    : 932
+  Class dist      : Counter({np.int64(0): 727, np.int64(1): 205})
+
+C:\Users\T-Plug\anaconda3\envs\social_media_mining_env\Lib\site-packages\torch\nn\init.py:582: UserWarning: Initializing zero-element tensors is a no-op
+  warnings.warn("Initializing zero-element tensors is a no-op")
+  Test Accuracy  : 0.9582
+  Test Precision : 0.9511
+  Test Recall    : 0.8537
+  Test F1 Score  : 0.8997
+  Test AUC       : 0.9847
+
+              precision    recall  f1-score   support
+
+    No Churn       0.96      0.99      0.97       727
+       Churn       0.95      0.85      0.90       205
+
+    accuracy                           0.96       932
+   macro avg       0.96      0.92      0.94       932
+weighted avg       0.96      0.96      0.96       932
+
+  Confusion matrix saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold\telco1_cm_test.png
+
+============================================================
+  DATASET: telco2  [target_corr_threshold]
+============================================================
+  [Groups] {'Profile': 1, 'Contract': 5, 'Billing': 3, 'Usage': 4}
+  Feature columns : 13
+  Group sizes     : {'Profile': 1, 'Contract': 5, 'Billing': 3, 'Usage': 4}
+  Test samples    : 963
+  Class dist      : Counter({np.int64(0): 740, np.int64(1): 223})
+
+  Test Accuracy  : 0.7985
+  Test Precision : 0.5784
+  Test Recall    : 0.4798
+  Test F1 Score  : 0.5245
+  Test AUC       : 0.8412
+
+              precision    recall  f1-score   support
+
+    No Churn       0.85      0.89      0.87       740
+       Churn       0.58      0.48      0.52       223
+
+    accuracy                           0.80       963
+   macro avg       0.71      0.69      0.70       963
+weighted avg       0.79      0.80      0.79       963
+
+  Confusion matrix saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/target_corr_threshold\telco2_cm_test.png
+
+============================================================
+  ALL DATASETS COMPLETE
+============================================================

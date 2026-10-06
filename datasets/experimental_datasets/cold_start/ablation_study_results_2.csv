@@ -1,0 +1,19 @@
+Dataset,Variant,Macro F1,ROC-AUC,ECE,"Train Time (s, avg)",Inference (ms/episode),Params,N Seeds
+telco1,Full (MPMN+VML),62.39% (±4.92),68.59% (±6.68),0.1895,202.0,3.69,"11,201",3
+telco1,No Temperature Scaling,56.56% (±1.03),60.28% (±1.23),0.2544,153.9,3.92,"11,201",3
+telco1,No Uncertainty Weighting,65.99% (±2.68),71.49% (±4.48),0.1459,154.6,3.56,"11,201",3
+telco1,No KL Regularization,63.93% (±5.09),69.41% (±6.35),0.1841,208.2,3.85,"11,201",3
+telco1,No Variational Path (Point Estimate),66.51% (±0.51),72.20% (±1.94),0.1513,152.2,2.70,"11,201",3
+telco1,Vanilla ProtoNet (floor),67.18% (±0.74),71.13% (±0.26),0.1546,129.9,2.36,"11,201",3
+telco2,Full (MPMN+VML),63.26% (±0.87),70.46% (±0.87),0.1770,174.5,1.85,"2,913",3
+telco2,No Temperature Scaling,60.50% (±1.22),66.15% (±1.66),0.2206,142.9,1.87,"2,913",3
+telco2,No Uncertainty Weighting,66.41% (±0.53),72.57% (±1.04),0.1654,130.9,1.78,"2,913",3
+telco2,No KL Regularization,62.20% (±0.62),69.44% (±0.43),0.1734,367.7,4.16,"2,913",3
+telco2,No Variational Path (Point Estimate),67.68% (±1.38),75.06% (±0.90),0.1569,272.2,2.67,"2,913",3
+telco2,Vanilla ProtoNet (floor),68.07% (±1.39),75.23% (±0.69),0.1584,140.1,1.96,"2,913",3
+bank,Full (MPMN+VML),56.75% (±1.86),72.74% (±0.86),0.2346,277.9,5.81,"9,665",3
+bank,No Temperature Scaling,54.24% (±1.33),66.03% (±1.69),0.2773,256.3,5.27,"9,665",3
+bank,No Uncertainty Weighting,51.71% (±2.12),70.97% (±0.59),0.2409,218.7,6.12,"9,665",3
+bank,No KL Regularization,55.09% (±2.25),71.58% (±1.44),0.2351,258.9,6.37,"9,665",3
+bank,No Variational Path (Point Estimate),49.07% (±4.78),71.26% (±0.67),0.2469,184.7,3.34,"9,665",3
+bank,Vanilla ProtoNet (floor),49.16% (±4.62),71.07% (±0.46),0.2470,173.0,3.71,"9,665",3

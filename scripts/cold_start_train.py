@@ -31,7 +31,7 @@ from collections import deque
 from sklearn.metrics import f1_score, roc_auc_score, precision_score, recall_score
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from models.cold_start_model import MPMN, compute_vml_loss, DATASET_CONFIGS
+from models.cold_start.cold_start_model import MPMN, compute_vml_loss, DATASET_CONFIGS
 
 # ── Global training constants ─────────────────────────────────────────────────
 EPOCHS = 150
@@ -370,24 +370,25 @@ def train(
 
 
 if __name__ == "__main__":
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     datasets = [
         {
-            "train_path": "../datasets/processed/telco1/mpmn_ready/train_augmented.npz",
-            "val_path": "../datasets/processed/telco1/mpmn_ready/val.npz",
+            "train_path": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco1", "mpmn_ready", "train_augmented.npz"),
+            "val_path": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco1", "mpmn_ready", "val.npz"),
             "dataset": "telco1",
-            "save_path": "../models/mpmn_telco1.pth",
+            "save_path": os.path.join(PROJECT_ROOT, "checkpoints", "cold_start_", "mpmn_telco1.pth"),
         },
         {
-            "train_path": "../datasets/processed/telco2/mpmn_ready/train.npz",
-            "val_path": "../datasets/processed/telco2/mpmn_ready/val.npz",
+            "train_path": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco2", "mpmn_ready", "train.npz"),
+            "val_path": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco2", "mpmn_ready", "val.npz"),
             "dataset": "telco2",
-            "save_path": "../models/mpmn_telco2.pth",
+            "save_path": os.path.join(PROJECT_ROOT, "checkpoints", "cold_start_", "mpmn_telco2.pth"),
         },
         {
-            "train_path": "../datasets/processed/bank/mpmn_ready/train_augmented.npz",
-            "val_path": "../datasets/processed/bank/mpmn_ready/val.npz",
+            "train_path": os.path.join(PROJECT_ROOT, "datasets", "processed", "bank", "mpmn_ready", "train_augmented.npz"),
+            "val_path": os.path.join(PROJECT_ROOT, "datasets", "processed", "bank", "mpmn_ready", "val.npz"),
             "dataset": "bank",
-            "save_path": "../models/mpmn_bank.pth",
+            "save_path": os.path.join(PROJECT_ROOT, "checkpoints", "cold_start_", "mpmn_bank.pth"),
         },
     ]
 

@@ -1,0 +1,4 @@
+Dataset,Variant,Accuracy,Precision,Recall,Macro F1,ROC-AUC,ECE,Inference (ms/episode),Params
+telco1,Basic Distance Metric (no meta-learning),58.50% (±0.68),69.17% (±0.72),60.11% (±1.23),56.94% (±0.69),61.33% (±0.83),0.2599,0.096,0 (no learned parameters)
+telco2,Basic Distance Metric (no meta-learning),67.42% (±0.47),80.20% (±0.59),66.42% (±1.08),65.99% (±0.47),73.78% (±0.51),0.1954,0.096,0 (no learned parameters)
+bank,Basic Distance Metric (no meta-learning),56.57% (±0.86),29.07% (±0.44),69.04% (±1.01),52.86% (±0.66),65.84% (±0.56),0.2733,0.107,0 (no learned parameters)

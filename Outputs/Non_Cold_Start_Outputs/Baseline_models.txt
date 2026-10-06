@@ -1,0 +1,263 @@
+(social_media_mining_env) PS C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project> python baseline_models.py
+
+############################################################
+  DATASET: bank
+############################################################
+  [Groups] {'Profile': 8, 'Contract': 2, 'Billing': 2, 'Usage': 3}
+  [Groups] {'Profile': 8, 'Contract': 2, 'Billing': 2, 'Usage': 3}
+
+============================================================
+  Logistic Regression
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.83      0.96      0.89      1006
+       Churn       0.54      0.17      0.26       243
+
+    accuracy                           0.81      1249
+   macro avg       0.68      0.57      0.58      1249
+weighted avg       0.77      0.81      0.77      1249
+
+AUC       : 0.7088
+F1        : 0.2617
+Accuracy  : 0.8102
+Precision : 0.5385
+Recall    : 0.1728
+
+============================================================
+  Random Forest
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.88      0.96      0.92      1006
+       Churn       0.73      0.44      0.55       243
+
+    accuracy                           0.86      1249
+   macro avg       0.81      0.70      0.74      1249
+weighted avg       0.85      0.86      0.85      1249
+
+AUC       : 0.8362
+F1        : 0.5538
+Accuracy  : 0.8607
+Precision : 0.7347
+Recall    : 0.4444
+
+============================================================
+  Gradient Boosting
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.88      0.95      0.92      1006
+       Churn       0.70      0.46      0.56       243
+
+    accuracy                           0.86      1249
+   macro avg       0.79      0.71      0.74      1249
+weighted avg       0.85      0.86      0.85      1249
+
+AUC       : 0.8408
+F1        : 0.5572
+Accuracy  : 0.8575
+Precision : 0.7044
+Recall    : 0.4609
+
+============================================================
+  Vanilla MLP (PyTorch)
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.87      0.96      0.92      1006
+       Churn       0.72      0.43      0.54       243
+
+    accuracy                           0.86      1249
+   macro avg       0.80      0.69      0.73      1249
+weighted avg       0.84      0.86      0.84      1249
+
+AUC       : 0.8219
+F1        : 0.5375
+Accuracy  : 0.8567
+Precision : 0.7222
+Recall    : 0.4280
+
+============================================================
+  SUMMARY — bank
+============================================================
+Model                         AUC      F1     Acc    Prec     Rec
+Logistic Regression        0.7088  0.2617  0.8102  0.5385  0.1728
+Random Forest              0.8362  0.5538  0.8607  0.7347  0.4444
+Gradient Boosting          0.8408  0.5572  0.8575  0.7044  0.4609
+Vanilla MLP (PyTorch)      0.8219  0.5375  0.8567  0.7222  0.4280
+
+############################################################
+  DATASET: telco1
+############################################################
+  [Groups] {'Profile': 10, 'Contract': 10, 'Billing': 11, 'Usage': 19}
+  [Groups] {'Profile': 10, 'Contract': 10, 'Billing': 11, 'Usage': 19}
+
+============================================================
+  Logistic Regression
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.97      0.97      0.97       727
+       Churn       0.90      0.89      0.90       205
+
+    accuracy                           0.95       932
+   macro avg       0.94      0.93      0.93       932
+weighted avg       0.95      0.95      0.95       932
+
+AUC       : 0.9909
+F1        : 0.8971
+Accuracy  : 0.9549
+Precision : 0.9015
+Recall    : 0.8927
+
+============================================================
+  Random Forest
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.96      0.99      0.97       727
+       Churn       0.97      0.84      0.90       205
+
+    accuracy                           0.96       932
+   macro avg       0.96      0.92      0.94       932
+weighted avg       0.96      0.96      0.96       932
+
+AUC       : 0.9842
+F1        : 0.9010
+Accuracy  : 0.9592
+Precision : 0.9665
+Recall    : 0.8439
+
+============================================================
+  Gradient Boosting
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.97      0.98      0.97       727
+       Churn       0.93      0.88      0.91       205
+
+    accuracy                           0.96       932
+   macro avg       0.95      0.93      0.94       932
+weighted avg       0.96      0.96      0.96       932
+
+AUC       : 0.9906
+F1        : 0.9073
+Accuracy  : 0.9603
+Precision : 0.9330
+Recall    : 0.8829
+
+============================================================
+  Vanilla MLP (PyTorch)
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.97      0.97      0.97       727
+       Churn       0.89      0.91      0.90       205
+
+    accuracy                           0.95       932
+   macro avg       0.93      0.94      0.93       932
+weighted avg       0.96      0.95      0.96       932
+
+AUC       : 0.9911
+F1        : 0.8986
+Accuracy  : 0.9549
+Precision : 0.8900
+Recall    : 0.9073
+
+============================================================
+  SUMMARY — telco1
+============================================================
+Model                         AUC      F1     Acc    Prec     Rec
+Logistic Regression        0.9909  0.8971  0.9549  0.9015  0.8927
+Random Forest              0.9842  0.9010  0.9592  0.9665  0.8439
+Gradient Boosting          0.9906  0.9073  0.9603  0.9330  0.8829
+Vanilla MLP (PyTorch)      0.9911  0.8986  0.9549  0.8900  0.9073
+
+############################################################
+  DATASET: telco2
+############################################################
+  [Groups] {'Profile': 5, 'Contract': 7, 'Billing': 7, 'Usage': 22}
+  [Groups] {'Profile': 5, 'Contract': 7, 'Billing': 7, 'Usage': 22}
+
+============================================================
+  Logistic Regression
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.85      0.92      0.88       740
+       Churn       0.64      0.48      0.55       223
+
+    accuracy                           0.82       963
+   macro avg       0.75      0.70      0.72       963
+weighted avg       0.80      0.82      0.81       963
+
+AUC       : 0.8461
+F1        : 0.5473
+Accuracy  : 0.8162
+Precision : 0.6369
+Recall    : 0.4798
+
+============================================================
+  Random Forest
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.84      0.93      0.88       740
+       Churn       0.64      0.43      0.52       223
+
+    accuracy                           0.81       963
+   macro avg       0.74      0.68      0.70       963
+weighted avg       0.80      0.81      0.80       963
+
+AUC       : 0.8369
+F1        : 0.5187
+Accuracy  : 0.8131
+Precision : 0.6424
+Recall    : 0.4350
+
+============================================================
+  Gradient Boosting
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.85      0.91      0.88       740
+       Churn       0.61      0.45      0.52       223
+
+    accuracy                           0.81       963
+   macro avg       0.73      0.68      0.70       963
+weighted avg       0.79      0.81      0.79       963
+
+AUC       : 0.8456
+F1        : 0.5168
+Accuracy  : 0.8058
+Precision : 0.6098
+Recall    : 0.4484
+
+============================================================
+  Vanilla MLP (PyTorch)
+============================================================
+              precision    recall  f1-score   support
+
+    No Churn       0.86      0.90      0.88       740
+       Churn       0.60      0.50      0.55       223
+
+    accuracy                           0.81       963
+   macro avg       0.73      0.70      0.71       963
+weighted avg       0.80      0.81      0.80       963
+
+AUC       : 0.8088
+F1        : 0.5477
+Accuracy  : 0.8079
+Precision : 0.6022
+Recall    : 0.5022
+
+============================================================
+  SUMMARY — telco2
+============================================================
+Model                         AUC      F1     Acc    Prec     Rec
+Logistic Regression        0.8461  0.5473  0.8162  0.6369  0.4798
+Random Forest              0.8369  0.5187  0.8131  0.6424  0.4350
+Gradient Boosting          0.8456  0.5168  0.8058  0.6098  0.4484
+Vanilla MLP (PyTorch)      0.8088  0.5477  0.8079  0.6022  0.5022
+(social_media_mining_env) PS C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project>

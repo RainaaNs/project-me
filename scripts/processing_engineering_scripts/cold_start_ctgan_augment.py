@@ -38,8 +38,8 @@ TARGET_TRAIN_SIZE = {
 
 # CTGAN config
 CTGAN_CONFIG = {
-    "epochs":            300,
-    "batch_size":        500,
+    "epochs":            500,
+    "batch_size":        1000,
     "generator_dim":     (256, 256),
     "discriminator_dim": (256, 256),
     "verbose":           True,
@@ -309,22 +309,22 @@ def run(dataset: str, mpmn_dir: str, model_dir: str):
 
 
 if __name__ == "__main__":
-<<<<<<< HEAD
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     datasets = [
         {
             "dataset": "bank",
-            "mpmn_dir": "../../datasets/processed/bank/mpmn_ready",
-            "model_dir": "../../models/ctgan",
+            "mpmn_dir": os.path.join(PROJECT_ROOT, "datasets", "processed", "bank", "mpmn_ready"),
+            "model_dir": os.path.join(PROJECT_ROOT, "models", "ctgan"),
         },
         {
             "dataset": "telco1",
-            "mpmn_dir": "../../datasets/processed/telco1/mpmn_ready",
-            "model_dir": "../../models/ctgan",
+            "mpmn_dir": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco1", "mpmn_ready"),
+            "model_dir": os.path.join(PROJECT_ROOT, "models", "ctgan"),
         },
         {
             "dataset": "telco2",
-            "mpmn_dir": "../../datasets/processed/telco2/mpmn_ready",
-            "model_dir": "../../models/ctgan",
+            "mpmn_dir": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco2", "mpmn_ready"),
+            "model_dir": os.path.join(PROJECT_ROOT, "models", "ctgan"),
         },
     ]
 
@@ -334,10 +334,3 @@ if __name__ == "__main__":
             mpmn_dir=ds["mpmn_dir"],
             model_dir=ds["model_dir"],
         )
-=======
-    run(
-        dataset="telco2",
-        mpmn_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\datasets\processed\telco2\mpmn_ready",
-        model_dir=r"C:\Users\T-Plug\Desktop\ML Mini Project\hybrid_churn_prediction_project\models\ctgan",
-    )
->>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045

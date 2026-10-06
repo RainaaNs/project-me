@@ -1,0 +1,13 @@
+Dataset,Model,Accuracy,Precision,Recall,Macro F1,ROC-AUC,ECE,Params,Cost/Episode (ms)
+telco1,MPMN+VML (Ours),70.65% (±0.45),78.06% (±0.63),74.58% (±0.97),68.63% (±0.64),76.43%,0.1564,"11,201",4.24 (inference only — trained once)
+telco1,Vanilla ProtoNet,68.91% (±0.78),77.80% (±0.86),70.01% (±1.16),67.70% (±0.77),71.26%,0.1673,"11,201",2.61 (inference only — trained once)
+telco1,Random Forest,60.30%,72.54%,58.54%,59.36%,n/a,n/a,"n/a (50 trees, retrained per episode)","75.05 (fit + predict, every episode)"
+telco1,XGBoost,56.10%,68.34%,54.95%,54.99%,n/a,n/a,"n/a (50 trees, retrained per episode)","15.62 (fit + predict, every episode)"
+telco2,MPMN+VML (Ours),63.90% (±0.60),74.91% (±0.60),66.70% (±1.09),61.69% (±0.61),67.93%,0.1704,"2,913",1.68 (inference only — trained once)
+telco2,Vanilla ProtoNet,71.22% (±0.49),85.40% (±0.56),67.47% (±1.14),70.21% (±0.49),76.38%,0.1625,"2,913",1.32 (inference only — trained once)
+telco2,Random Forest,60.71%,74.50%,59.87%,59.20%,n/a,n/a,"n/a (50 trees, retrained per episode)","74.45 (fit + predict, every episode)"
+telco2,XGBoost,59.86%,73.29%,59.73%,58.08%,n/a,n/a,"n/a (50 trees, retrained per episode)","15.30 (fit + predict, every episode)"
+bank,MPMN+VML (Ours),55.52% (±1.01),29.59% (±0.43),74.49% (±1.06),52.46% (±0.79),68.56%,0.2482,"9,665",4.28 (inference only — trained once)
+bank,Vanilla ProtoNet,58.89% (±1.09),31.88% (±0.38),76.57% (±0.97),55.30% (±0.97),71.72%,0.2358,"9,665",2.36 (inference only — trained once)
+bank,Random Forest,64.71%,33.84%,63.77%,58.86%,n/a,n/a,"n/a (50 trees, retrained per episode)","74.40 (fit + predict, every episode)"
+bank,XGBoost,61.20%,30.62%,62.28%,55.75%,n/a,n/a,"n/a (50 trees, retrained per episode)","15.41 (fit + predict, every episode)"

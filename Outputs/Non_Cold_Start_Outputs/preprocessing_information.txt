@@ -1,0 +1,12 @@
+Changes from v1:
+    - [CRITICAL] Added 'Complain' to leakage_columns (near-deterministic of churn in Bank).
+    - [CRITICAL] Added Telco 1 redundant binary columns to drop list:
+        'Under 30', 'Senior Citizen', 'Dependents', 'Referred a Friend'
+    - [CRITICAL] Added post-hoc Telco 1 columns: 'Churn Score', 'CLTV', 'Total Revenue'
+    - [MEDIUM]   Added geo noise columns for Telco 1: 'Country', 'State', 'City',
+                 'Zip Code', 'Population'
+    - [MEDIUM]   Structural imputation: 'Internet Type' null → 'No Internet Service'
+    - [MEDIUM]   TotalCharges string → numeric coercion for Telco 2
+
+    Note: Encoding and Scaling are reserved for Phase 2 (Feature Engineering)
+    to allow model-specific transformation strategies.

@@ -1,194 +1,375 @@
 """
-This is the first step, this where we did the minimum processing
-Clean → Detect Cold-Start → Route & Split
+prepare_data.py — Step 1: Prepare Data
 
-Runs the full preprocessing pipeline on a raw dataset and produces
-three output CSVs: train.csv, val.csv, test.csv — each containing all
-original columns plus the is_cold_start flag.
+Pipeline:
 
-These output CSVs are the input to feature_engineering.py (Step 4).
+    Raw Data
+        ↓
+    Minimal Cleaning
+        ↓
+    Cold-Start Detection
+        ↓
+    Unified DataFrame + is_cold_start
+        ↓
+    Stratified Train / Validation / Test Split
 
-Usage:
-    python prepare_data.py --data data/raw/bank_customer_churn.csv
-                           --dataset bank
-                           --out-dir data/prepared/bank
+IMPORTANT:
+    This stage does NOT perform model feature selection.
 
-    python prepare_data.py --data data/raw/telco_customer_churn_1.csv
-                           --dataset telco1
-                           --out-dir data/prepared/telco1
+    All model-specific feature decisions are reserved for:
+        feature_engineering_definitions.py
 
-    python prepare_data.py --data data/raw/telco_customer_churn_2.csv
-                           --dataset telco2
-                           --out-dir data/prepared/telco2
+This script produces:
 
-Dataset-specific notes:
-    bank    → strategy='bank',       target_col='Exited'
-    telco1 → strategy='telco_depth', target_col='Churn Label'
-    telco2 → strategy='generic',     target_col='Churn'
+    {out-dir}/train.csv
+    {out-dir}/val.csv
+    {out-dir}/test.csv
+    {out-dir}/routing_summary.json
+    {out-dir}/prepare_log.txt
 
-Output:
-    {out-dir}/train.csv   — 70% of data, with is_cold_start column
-    {out-dir}/val.csv     — 15% of data, with is_cold_start column
-    {out-dir}/test.csv    — 15% of data, with is_cold_start column
-    {out-dir}/routing_summary.json — cold-start stats
+Each CSV contains:
+    - cleaned original columns
+    - standardized 'Churn' target
+    - 'is_cold_start' flag
+
+The cold-start and non-cold-start populations are NOT separated
+into different files at this stage. The feature_engineering.py
+stage performs that separation.
 """
 
-import argparse
 import json
 import os
 import sys
 import pandas as pd
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Import from the cold-start project's processing module.
-
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
-from processing_module import MinimalPreprocessor, RobustColdStartDetector, DataRouter
 
 
-# ── Dataset-specific config ───────────────────────────────────────────────────
+# ── Make local processing_module.py importable ────────────────────────────────
+SCRIPT_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+from processing_module import (
+    MinimalPreprocessor,
+    RobustColdStartDetector,
+    DataRouter,
+)
+
+
+# ── Dataset-specific configuration ────────────────────────────────────────────
 DATASET_CONFIGS = {
+
     "telco1": {
-        "target_col":       "Churn Label",
-        "strategy":         "telco_depth",
-        "tenure_col":       "Tenure in Months",
-        "referral_col":     "Number of Referrals",
-        "offer_col":        "Offer",
-        "contract_col":     "Contract",
-        "total_charges_col":"Total Charges",
-        "routing_columns":  ["Tenure in Months", "Number of Referrals", "Offer"],
+        "target_col": "Churn Label",
+        "strategy": "telco_depth",
+
+        "tenure_col": "Tenure in Months",
+        "referral_col": "Number of Referrals",
+        "offer_col": "Offer",
+        "contract_col": "Contract",
+        "total_charges_col": "Total Charges",
+
+        "routing_columns": [
+            "Tenure in Months",
+            "Number of Referrals",
+            "Offer",
+        ],
     },
+
     "telco2": {
-        "target_col":       "Churn",
-        "strategy":         "generic",
-        "tenure_col":       "tenure",
-        "referral_col":     "referrals",  
-        "offer_col":        "offer",       
-        "contract_col":     "Contract",
-        "total_charges_col":"TotalCharges",
-        "routing_columns":  ["tenure"],
+        "target_col": "Churn",
+        "strategy": "generic",
+
+        "tenure_col": "tenure",
+        "referral_col": "referrals",
+        "offer_col": "offer",
+        "contract_col": "Contract",
+        "total_charges_col": "TotalCharges",
+
+        "routing_columns": [
+            "tenure",
+        ],
     },
+
     "bank": {
-        "target_col":       "Exited",
-        "strategy":         "bank",
-        "tenure_col":       "Tenure",
-        "referral_col":     "referrals",   # not present — detector handles gracefully
-        "offer_col":        "offer",       # not present
-        "contract_col":     "Contract",    # not present
-        "total_charges_col":"TotalCharges",# not present
+        "target_col": "Exited",
+        "strategy": "bank",
+
+        "tenure_col": "Tenure",
+
+        # These do not exist in the Bank dataset, but the detector
+        # handles missing columns gracefully.
+        "referral_col": "referrals",
+        "offer_col": "offer",
+        "contract_col": "Contract",
+        "total_charges_col": "TotalCharges",
+
         "num_products_col": "NumOfProducts",
-        "is_active_col":    "IsActiveMember",
-        "routing_columns":  ["Tenure"],
+        "is_active_col": "IsActiveMember",
+
+        "routing_columns": [
+            "Tenure",
+        ],
     },
 }
-# ─────────────────────────────────────────────────────────────────────────────
 
 
-def run(data_path: str, dataset: str, out_dir: str):
+def run(
+    data_path: str,
+    dataset: str,
+    out_dir: str,
+):
+
     if dataset not in DATASET_CONFIGS:
         raise ValueError(
-            f"Unknown dataset '{dataset}'. Must be one of: {list(DATASET_CONFIGS.keys())}"
+            f"Unknown dataset '{dataset}'. "
+            f"Must be one of: "
+            f"{list(DATASET_CONFIGS.keys())}"
         )
 
     cfg = DATASET_CONFIGS[dataset]
 
-    print(f"\n{'='*70}")
-    print(f"  PREPARE DATA  {dataset}")
-    print(f"{'='*70}\n")
+    print("\n" + "=" * 70)
+    print(f"  PREPARE DATA — {dataset}")
+    print("=" * 70 + "\n")
 
-    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(
+        out_dir,
+        exist_ok=True,
+    )
 
-    # ── Step 1: Load ──────────────────────────────────────────────────────────
+    # ═════════════════════════════════════════════════════════════════════════
+    # STEP 1 — LOAD RAW DATA
+    # ═════════════════════════════════════════════════════════════════════════
+
     df_raw = pd.read_csv(data_path)
-    print(f"[Prepare] Loaded {len(df_raw)} rows from: {data_path}\n")
 
-    # ── Step 1: Clean ─────────────────────────────────────────────────────────
+    print(
+        f"[Prepare] Loaded {len(df_raw)} rows "
+        f"from: {data_path}\n"
+    )
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # STEP 2 — MINIMAL CLEANING
+    # ═════════════════════════════════════════════════════════════════════════
+
     preprocessor = MinimalPreprocessor(
         target_column=cfg["target_col"],
         routing_columns=cfg["routing_columns"],
     )
-    df_clean = preprocessor.clean(df_raw)
 
-    # ── Step 2: Detect cold-start ─────────────────────────────────────────────
+    df_clean = preprocessor.clean(
+        df_raw
+    )
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # STEP 3 — COLD-START DETECTION
+    # ═════════════════════════════════════════════════════════════════════════
+
     detector_kwargs = {
-        "strategy":          cfg["strategy"],
-        "tenure_col":        cfg["tenure_col"],
-        "referral_col":      cfg.get("referral_col", "referrals"),
-        "offer_col":         cfg.get("offer_col", "offer"),
-        "contract_col":      cfg.get("contract_col", "Contract"),
-        "total_charges_col": cfg.get("total_charges_col", "TotalCharges"),
+        "strategy": cfg["strategy"],
+        "tenure_col": cfg["tenure_col"],
+        "referral_col": cfg.get(
+            "referral_col",
+            "referrals",
+        ),
+        "offer_col": cfg.get(
+            "offer_col",
+            "offer",
+        ),
+        "contract_col": cfg.get(
+            "contract_col",
+            "Contract",
+        ),
+        "total_charges_col": cfg.get(
+            "total_charges_col",
+            "TotalCharges",
+        ),
     }
+
+    # Bank-specific cold-start detection fields.
     if dataset == "bank":
-        detector_kwargs["num_products_col"] = cfg.get("num_products_col", "NumOfProducts")
-        detector_kwargs["is_active_col"]    = cfg.get("is_active_col", "IsActiveMember")
 
-    detector = RobustColdStartDetector(**detector_kwargs)
-    cold_start_flags = detector.detect(df_clean)
+        detector_kwargs[
+            "num_products_col"
+        ] = cfg.get(
+            "num_products_col",
+            "NumOfProducts",
+        )
 
-    # ── Step 3: Route & Split ─────────────────────────────────────────────────
-    router     = DataRouter(target_column="Churn")
-    df_flagged = router.route(df_clean, cold_start_flags)
-    splits     = router.split(df_flagged)
+        detector_kwargs[
+            "is_active_col"
+        ] = cfg.get(
+            "is_active_col",
+            "IsActiveMember",
+        )
 
-    # ── Save outputs ──────────────────────────────────────────────────────────
+    detector = RobustColdStartDetector(
+        **detector_kwargs
+    )
+
+    cold_start_flags = detector.detect(
+        df_clean
+    )
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # STEP 4 — ATTACH ROUTING FLAG + SPLIT
+    # ═════════════════════════════════════════════════════════════════════════
+
+    router = DataRouter(
+        target_column="Churn"
+    )
+
+    # IMPORTANT:
+    # This does NOT create separate cold/non-cold datasets.
+    # It attaches a flag to the unified dataframe.
+    df_flagged = router.route(
+        df_clean,
+        cold_start_flags,
+    )
+
+    splits = router.split(
+        df_flagged
+    )
+
+    # ═════════════════════════════════════════════════════════════════════════
+    # STEP 5 — SAVE PREPARED DATA
+    # ═════════════════════════════════════════════════════════════════════════
+
     for split_name, df_split in splits.items():
-        out_path = os.path.join(out_dir, f"{split_name}.csv")
-        df_split.to_csv(out_path, index=False)
-        print(f"[Prepare] Saved {split_name}.csv → {out_path}  ({len(df_split)} rows)")
 
-    # Save routing summary
-    summary = router.get_routing_summary()
-    summary_path = os.path.join(out_dir, "routing_summary.json")
-    with open(summary_path, "w") as f:
-        json.dump(summary, f, indent=2)
-    print(f"[Prepare] Routing summary → {summary_path}")
+        out_path = os.path.join(
+            out_dir,
+            f"{split_name}.csv",
+        )
 
-    print(f"\n[Prepare] Done. Outputs in: {out_dir}\n")
+        df_split.to_csv(
+            out_path,
+            index=False,
+        )
+
+        print(
+            f"[Prepare] Saved {split_name}.csv → "
+            f"{out_path} "
+            f"({len(df_split)} rows, "
+            f"{len(df_split.columns)} columns)"
+        )
+
+    # ── Save routing summary ──────────────────────────────────────────────────
+    summary_path = os.path.join(
+        out_dir,
+        "routing_summary.json",
+    )
+
+    with open(
+        summary_path,
+        "w",
+    ) as f:
+
+        json.dump(
+            router.get_routing_summary(),
+            f,
+            indent=2,
+        )
+
+    print(
+        f"[Prepare] Routing summary → "
+        f"{summary_path}"
+    )
+
+    print(
+        f"\n[Prepare] Done. "
+        f"Outputs in: {out_dir}\n"
+    )
+
     return splits
 
 
-def run_with_logging(data_path: str, dataset: str, out_dir: str):
-    """Wraps run() and redirects stdout to a per-dataset log file."""
-    os.makedirs(out_dir, exist_ok=True)
-    log_path = os.path.join(out_dir, "prepare_log.txt")
+def run_with_logging(
+    data_path: str,
+    dataset: str,
+    out_dir: str,
+):
+    """
+    Runs prepare_data.py while saving console output
+    to a dataset-specific log file.
+    """
 
-    with open(log_path, "w") as log_file:
-        # Temporarily redirect stdout to the log file
+    os.makedirs(
+        out_dir,
+        exist_ok=True,
+    )
+
+    log_path = os.path.join(
+        out_dir,
+        "prepare_log.txt",
+    )
+
+    with open(
+        log_path,
+        "w",
+    ) as log_file:
+
         original_stdout = sys.stdout
         sys.stdout = log_file
+
         try:
-            result = run(data_path, dataset, out_dir)
+            result = run(
+                data_path,
+                dataset,
+                out_dir,
+            )
+
         finally:
-            # Always restore stdout even if run() crashes
             sys.stdout = original_stdout
 
-    print(f"✓ {dataset} done — log saved to {log_path}")
+    print(
+        f"✓ {dataset} done — "
+        f"log saved to {log_path}"
+    )
+
     return result
 
 
-
-
-
 if __name__ == "__main__":
+
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
     datasets = [
+
         {
-            "data_path": "../../datasets/original_datasets/telco1.csv",
-            "dataset": "telco1",
-            "out_dir": "../../datasets/prepared/telco1",
+            "data_path":
+                os.path.join(PROJECT_ROOT, "datasets", "original_datasets", "telco1.csv"),
+            "dataset":
+                "telco1",
+            "out_dir":
+                os.path.join(PROJECT_ROOT, "datasets", "prepared", "telco1"),
         },
+
         {
-            "data_path": "../../datasets/original_datasets/telco2.csv",
-            "dataset": "telco2",
-            "out_dir": "../../datasets/prepared/telco2",
+            "data_path":
+                os.path.join(PROJECT_ROOT, "datasets", "original_datasets", "telco2.csv"),
+            "dataset":
+                "telco2",
+            "out_dir":
+                os.path.join(PROJECT_ROOT, "datasets", "prepared", "telco2"),
         },
+
         {
-            "data_path": "../../datasets/original_datasets/bank.csv",
-            "dataset": "bank",
-            "out_dir": "../../datasets/prepared/bank",
+            "data_path":
+                os.path.join(PROJECT_ROOT, "datasets", "original_datasets", "bank.csv"),
+            "dataset":
+                "bank",
+            "out_dir":
+                os.path.join(PROJECT_ROOT, "datasets", "prepared", "bank"),
         },
+
     ]
 
     for ds in datasets:
+
         run(
             data_path=ds["data_path"],
             dataset=ds["dataset"],

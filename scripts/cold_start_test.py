@@ -1,250 +1,196 @@
-"""
-scripts/cold_start_test.py — Cold-Start Test / Inference Script (MPMN+VML)
-
-Wraps the MPMN episodic evaluation loop as a callable test() function
-for use by hybrid_test.py and hybrid_predict.py.
-
-How MPMN inference works:
-    MPMN is a few-shot model — it cannot classify a query observation in
-    isolation. It needs a support set (a small pool of labelled examples)
-    to build class prototypes first, then measures distance from the query
-    to each prototype to produce a prediction.
-
-    At test time, we use the training data (passed in as support_df) as the
-    support pool. Each episode samples n_support examples per class from this
-    pool, builds prototypes, then classifies a batch of query observations
-    from the test set. Results are aggregated across TEST_EPISODES episodes
-    and averaged per query observation to produce stable final predictions.
-
-Dependencies:
-    src/models.py          → MPMN, DATASET_CONFIGS
-    scripts/cold_start_train.py → EpisodeDataset (imported directly)
-"""
-
 import os
 import sys
 import torch
 import numpy as np
 import pandas as pd
-from torch.utils.data import DataLoader
 from sklearn.metrics import (
-    classification_report, roc_auc_score, f1_score,
-    accuracy_score, precision_score, recall_score, confusion_matrix
+    f1_score,
+    roc_auc_score,
+    precision_score,
+    recall_score,
+    brier_score_loss,
 )
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from models.cold_start_model import MPMN, DATASET_CONFIGS
-
-# Import EpisodeDataset from cold_start_train to avoid duplication
-sys.path.append(os.path.dirname(__file__))
-from cold_start_train import EpisodeDataset
-
-TEST_EPISODES = 200   # number of episodic evaluations (same as notebook)
-# ─────────────────────────────────────────────────────────────────────────────
+# Add project root to path
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from models.cold_start.cold_start_model import MPMN, DATASET_CONFIGS
 
 
-def test(
-    df: pd.DataFrame,
-    dataset: str,
-    model_path: str,
-    return_proba: bool = True,
-    support_df: pd.DataFrame = None,
-    label_col: str = "Churn",
-) -> pd.DataFrame:
-    """
-    Run episodic inference using the saved MPMN+VML model.
+# ── 1. CALIBRATION METRIC (ECE) ───────────────────────────────────────────────
+def compute_ece(probs, labels, n_bins=10):
+    """Computes Expected Calibration Error (ECE)."""
+    bin_boundaries = np.linspace(0, 1, n_bins + 1)
+    ece = 0.0
+    for i in range(n_bins):
+        bin_lower, bin_upper = bin_boundaries[i], bin_boundaries[i + 1]
+        in_bin = (probs > bin_lower) & (probs <= bin_upper)
+        prop_in_bin = np.mean(in_bin)
+        if prop_in_bin > 0:
+            accuracy_in_bin = np.mean(labels[in_bin])
+            avg_confidence_in_bin = np.mean(probs[in_bin])
+            ece += np.abs(accuracy_in_bin - avg_confidence_in_bin) * prop_in_bin
+    return ece
 
-    Args:
-        df           : Cold-start test observations (pre-engineered).
-                       Must contain label_col if ground-truth metrics are needed.
-        dataset      : One of 'Telco_1', 'Telco_2', 'Bank'
-        model_path   : Path to saved .pth checkpoint from cold_start_train.py
-        return_proba : If True, include 'predicted_proba' column in output
-        support_df   : Labelled pool used to build prototypes. If None, a portion
-                       of df itself is used as the support pool (deployment mode).
-        label_col    : Name of the ground-truth label column (default: 'Churn')
 
-    Returns:
-        pd.DataFrame with columns:
-            - predicted_label  (int: 0 or 1)
-            - predicted_proba  (float, P(churn)) — if return_proba=True
-        Index matches input df's index (for merge_results() in hybrid_test.py).
-    """
-
-    if dataset not in DATASET_CONFIGS:
-        raise ValueError(f"Unknown dataset '{dataset}'. Must be one of: {list(DATASET_CONFIGS.keys())}")
-
-    cfg = DATASET_CONFIGS[dataset]
-
-    print(f"\n[CS-Test] Dataset: {dataset} | Episodes: {TEST_EPISODES} | "
-          f"Threshold: {cfg['decision_threshold']}")
-
-    # ── Load checkpoint ───────────────────────────────────────────────────────
-    checkpoint = torch.load(model_path, map_location='cpu')
-    input_dim  = checkpoint['input_dim']
-    saved_cfg  = checkpoint.get('config', cfg)
-
-    model = MPMN(
-        input_dim,
-        saved_cfg['hidden_dim'],
-        saved_cfg['latent_dim'],
-        saved_cfg['dropout']
-    )
-    model.load_state_dict(checkpoint['model_state_dict'])
+# ── 2. EPISODIC MPMN TESTER ───────────────────────────────────────────────────
+def evaluate_mpmn_episodic(model, X_test, y_test, cfg, n_support, n_episodes=500):
+    """Evaluates MPMN model across n_episodes to compute 95% Confidence Intervals."""
     model.eval()
+    idx_0 = np.where(y_test == 0)[0]
+    idx_1 = np.where(y_test == 1)[0]
 
-    final_temp = (torch.nn.functional.softplus(model.log_temp) + 0.01).item()
-    print(f"[CS-Test] Checkpoint loaded | learned temperature: {final_temp:.3f}")
-
-    # ── Prepare feature arrays ────────────────────────────────────────────────
-    # Use saved feature_cols if available, otherwise infer
-    feature_cols = checkpoint.get('feature_cols', None)
-    if feature_cols is None:
-        feature_cols = [c for c in df.columns
-                        if c != label_col and c != 'cold_start_flag' and c != 'is_cold_start']
-
-    X_test = df[feature_cols].values.astype(np.float32)
-
-    # y_test: used for support pool building and (if available) metric reporting
-    has_labels = label_col in df.columns
-    y_test = df[label_col].values.astype(int) if has_labels else None
-
-    # ── Support pool ──────────────────────────────────────────────────────────
-    # MPMN needs labelled examples to form prototypes.
-    # If a separate support_df is provided (e.g. training data), use it.
-    # Otherwise fall back to using the test df itself (deployment / no-label mode).
-    if support_df is not None and label_col in support_df.columns:
-        X_sup = support_df[feature_cols].values.astype(np.float32)
-        y_sup = support_df[label_col].values.astype(int)
-        print(f"[CS-Test] Support pool: {len(X_sup)} observations (separate df)")
-    elif has_labels:
-        X_sup = X_test
-        y_sup = y_test
-        print(f"[CS-Test] Support pool: test df itself ({len(X_sup)} obs) — "
-              f"no separate support provided")
-    else:
-        raise ValueError(
-            "MPMN requires a labelled support pool to build prototypes. "
-            "Either pass support_df or ensure df contains the label column."
-        )
-
-    # ── Episodic inference ────────────────────────────────────────────────────
-    # Strategy: run TEST_EPISODES episodes. Each episode:
-    #   1. Sample n_support per class from support pool → build prototypes
-    #   2. Use ALL test observations as the query set
-    #   3. Collect per-observation probabilities
-    # Final probability = mean across all episodes (reduces variance)
-
-    n_support   = saved_cfg['n_support']
-    threshold   = saved_cfg['decision_threshold']
-    idx_0_sup   = np.where(y_sup == 0)[0]
-    idx_1_sup   = np.where(y_sup == 1)[0]
-
-    if len(idx_0_sup) < n_support or len(idx_1_sup) < n_support:
-        raise ValueError(
-            f"Support pool too small: need {n_support} per class, "
-            f"have {len(idx_0_sup)} (class 0) and {len(idx_1_sup)} (class 1)."
-        )
-
-    X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
-    X_sup_tensor  = torch.tensor(X_sup,  dtype=torch.float32)
-    y_sup_tensor  = torch.tensor(y_sup,  dtype=torch.long)
-
-    all_probs = np.zeros((TEST_EPISODES, len(X_test)))
-
-    print(f"[CS-Test] Running {TEST_EPISODES} episodes...")
+    aucs, f1s, eces = [], [], []
 
     with torch.no_grad():
-        for ep in range(TEST_EPISODES):
+        for _ in range(n_episodes):
             # Sample support set
-            s0 = np.random.choice(idx_0_sup, n_support, replace=False)
-            s1 = np.random.choice(idx_1_sup, n_support, replace=False)
-            sup_idx = np.concatenate([s0, s1])
+            sup_idx_0 = np.random.choice(idx_0, n_support, replace=False)
+            sup_idx_1 = np.random.choice(idx_1, n_support, replace=False)
+            sup_idx = np.concatenate([sup_idx_0, sup_idx_1])
 
-            sup_X = X_sup_tensor[sup_idx]
-            sup_y = y_sup_tensor[sup_idx]
+            # Query set is the rest
+            qry_idx = np.setdiff1d(np.arange(len(y_test)), sup_idx)
 
-            # Full test set as query
-            logits, _, _, _, _, _ = model(sup_X, sup_y, X_test_tensor)
+            sup_X = torch.tensor(X_test[sup_idx], dtype=torch.float32)
+            sup_y = torch.tensor(y_test[sup_idx], dtype=torch.long)
+            qry_X = torch.tensor(X_test[qry_idx], dtype=torch.float32)
+            qry_y = y_test[qry_idx]
+
+            # Forward pass
+            logits, _, _, _, _, _ = model(sup_X, sup_y, qry_X)
             probs = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()
-            all_probs[ep] = probs
+            preds = (probs >= cfg["decision_threshold"]).astype(int)
 
-    # Average across episodes
-    mean_probs = all_probs.mean(axis=0)          # (n_test,)
-    final_preds = (mean_probs >= threshold).astype(int)
+            aucs.append(roc_auc_score(qry_y, probs))
+            f1s.append(f1_score(qry_y, preds, average="macro"))
+            eces.append(compute_ece(probs, qry_y))
 
-    print(f"[CS-Test] Done | Churn predicted: {final_preds.sum()} / {len(final_preds)}")
+    # Calculate 95% Confidence Intervals
+    f1_mean, f1_ci = np.mean(f1s), 1.96 * np.std(f1s) / np.sqrt(n_episodes)
+    auc_mean, auc_ci = np.mean(aucs), 1.96 * np.std(aucs) / np.sqrt(n_episodes)
+    ece_mean = np.mean(eces)
 
-    # ── Metrics (if ground truth available) ───────────────────────────────────
-    if has_labels:
-        auc       = roc_auc_score(y_test, mean_probs)
-        f1        = f1_score(y_test, final_preds, average='macro')
-        accuracy  = accuracy_score(y_test, final_preds)
-        precision = precision_score(y_test, final_preds, zero_division=0)
-        recall    = recall_score(y_test, final_preds, zero_division=0)
-        cm        = confusion_matrix(y_test, final_preds)
+    return f1_mean, f1_ci, auc_mean, auc_ci, ece_mean
 
-        print(f"\n[CS-Test] Test Results (threshold={threshold}):")
-        print(classification_report(y_test, final_preds, target_names=["No Churn", "Churn"]))
-        print(f"  AUC-ROC : {auc*100:.2f}%")
-        print(f"  Confusion Matrix: TN={cm[0,0]} FP={cm[0,1]} FN={cm[1,0]} TP={cm[1,1]}\n")
 
-    # ── Return DataFrame ──────────────────────────────────────────────────────
-    result = pd.DataFrame(
-        {"predicted_label": final_preds},
-        index=df.index   # preserve original index for merge_results()
+# ── 3. BASELINE EVALUATOR (Random Forest & XGBoost) ──────────────────────────
+def evaluate_baselines(X_test, y_test, n_support, n_runs=100):
+    """
+    Trains standard non-episodic models on the exact same k-shot support size
+    and evaluates on the remaining query test set.
+    """
+    idx_0 = np.where(y_test == 0)[0]
+    idx_1 = np.where(y_test == 1)[0]
+
+    rf_f1s, xgb_f1s = [], []
+
+    for _ in range(n_runs):
+        sup_idx_0 = np.random.choice(idx_0, n_support, replace=False)
+        sup_idx_1 = np.random.choice(idx_1, n_support, replace=False)
+        sup_idx = np.concatenate([sup_idx_0, sup_idx_1])
+        qry_idx = np.setdiff1d(np.arange(len(y_test)), sup_idx)
+
+        X_sup, y_sup = X_test[sup_idx], y_test[sup_idx]
+        X_qry, y_qry = X_test[qry_idx], y_test[qry_idx]
+
+        # Random Forest
+        rf = RandomForestClassifier(n_estimators=50, random_state=42)
+        rf.fit(X_sup, y_sup)
+        rf_preds = rf.predict(X_qry)
+        rf_f1s.append(f1_score(y_qry, rf_preds, average="macro"))
+
+        # XGBoost
+        xgb = XGBClassifier(
+            n_estimators=50, max_depth=3, eval_metric="logloss", random_state=42
+        )
+        xgb.fit(X_sup, y_sup)
+        xgb_preds = xgb.predict(X_qry)
+        xgb_f1s.append(f1_score(y_qry, xgb_preds, average="macro"))
+
+    return np.mean(rf_f1s), np.mean(xgb_f1s)
+
+
+# ── 4. MAIN BENCHMARKING PIPELINE ─────────────────────────────────────────────
+def run_benchmark(dataset_name, checkpoint_path, test_npz_path):
+    print(f"\n============================================================")
+    print(f" BENCHMARKING COLD-START PERFORMANCE — {dataset_name.upper()}")
+    print(f"============================================================")
+
+    # Load Saved MPMN Checkpoint
+    checkpoint = torch.load(checkpoint_path)
+    cfg = checkpoint["config"]
+    input_dim = checkpoint["input_dim"]
+
+    model = MPMN(input_dim, cfg["hidden_dim"], cfg["latent_dim"], cfg["dropout"])
+    model.load_state_dict(checkpoint["model_state_dict"])
+
+    # Load Test Data
+    test_data = np.load(test_npz_path)
+    X_test, y_test = test_data["X"].astype(np.float32), test_data["y"].astype(int)
+
+    # 1. Evaluate Model at Configured K-shot with Confidence Intervals
+    f1_m, f1_ci, auc_m, auc_ci, ece_m = evaluate_mpmn_episodic(
+        model, X_test, y_test, cfg, n_support=cfg["n_support"]
     )
-    if return_proba:
-        result["predicted_proba"] = mean_probs
+    print(f"\n[MPMN+VML Performance @ {cfg['n_support']}-shot]:")
+    print(f"  Macro F1: {f1_m * 100:.2f}% (± {f1_ci * 100:.2f}%)")
+    print(f"  ROC-AUC:  {auc_m * 100:.2f}% (± {auc_ci * 100:.2f}%)")
+    print(f"  ECE Calibration Error: {ece_m:.4f}")
 
-    return result
+    # 2. Multi-Shot Efficiency Curve (K-Shot comparison with Baselines)
+    k_shots = [3, 5, 10, 15]
+    results = []
+
+    print(f"\n[Running N-Shot Curve & Baseline Comparisons...]")
+    for k in k_shots:
+        if len(np.where(y_test == 0)[0]) < k or len(np.where(y_test == 1)[0]) < k:
+            continue
+
+        f1_mpmn, _, _, _, _ = evaluate_mpmn_episodic(
+            model, X_test, y_test, cfg, n_support=k, n_episodes=200
+        )
+        f1_rf, f1_xgb = evaluate_baselines(X_test, y_test, n_support=k, n_runs=50)
+
+        results.append(
+            {
+                "K-Shot": k,
+                "MPMN+VML (Ours)": f"{f1_mpmn * 100:.2f}%",
+                "Random Forest": f"{f1_rf * 100:.2f}%",
+                "XGBoost": f"{f1_xgb * 100:.2f}%",
+            }
+        )
+
+    # Print Comparison Table
+    df_results = pd.DataFrame(results)
+    print("\n--- Model Comparison across Support Sizes (Macro F1) ---")
+    print(df_results.to_string(index=False))
 
 
 if __name__ == "__main__":
-    datasets = [
+    # Example test runs
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    datasets_to_test = [
         {
-            "test_path": "../datasets/processed/telco1/mpmn_ready/test.npz",
-            "train_path": "../datasets/processed/telco1/mpmn_ready/train_augmented.npz",
-            "feat_path": "../datasets/processed/telco1/mpmn_ready/feature_names.json",
-            "dataset": "telco1",
-            "model_path": "../models/mpmn_telco1.pth",
+            "name": "telco1",
+            "model_path": os.path.join(PROJECT_ROOT, "checkpoints", "cold_start_", "mpmn_telco1.pth"),
+            "test_npz": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco1", "mpmn_ready", "test.npz"),
         },
         {
-            "test_path": "../datasets/processed/telco2/mpmn_ready/test.npz",
-            "train_path": "../datasets/processed/telco2/mpmn_ready/train_augmented.npz",
-            "feat_path": "../datasets/processed/telco2/mpmn_ready/feature_names.json",
-            "dataset": "telco2",
-            "model_path": "../models/mpmn_telco2.pth",
+            "name": "bank",
+            "model_path": os.path.join(PROJECT_ROOT, "checkpoints", "cold_start_", "mpmn_bank.pth"),
+            "test_npz": os.path.join(PROJECT_ROOT, "datasets", "processed", "bank", "mpmn_ready", "test.npz"),
         },
         {
-            "test_path": "../datasets/processed/bank/mpmn_ready/test.npz",
-            "train_path": "../datasets/processed/bank/mpmn_ready/train_augmented.npz",
-            "feat_path": "../datasets/processed/bank/mpmn_ready/feature_names.json",
-            "dataset": "bank",
-            "model_path": "../models/mpmn_bank.pth",
+            "name": "telco2",
+            "model_path": os.path.join(PROJECT_ROOT, "checkpoints", "cold_start_", "mpmn_telco2.pth"),
+            "test_npz": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco2", "mpmn_ready", "test.npz"),
         },
     ]
 
-    import json
-
-    for ds in datasets:
-        # Load feature names
-        with open(ds["feat_path"]) as f:
-            feat_names = json.load(f)
-
-        # Load test data
-        test_d = np.load(ds["test_path"])
-        test_df = pd.DataFrame(test_d["X"], columns=feat_names)
-        test_df["Churn"] = test_d["y"].astype(int)
-
-        # Load train (support pool)
-        train_d = np.load(ds["train_path"])
-        train_df = pd.DataFrame(train_d["X"], columns=feat_names)
-        train_df["Churn"] = train_d["y"].astype(int)
-
-        test(
-            df=test_df,
-            dataset=ds["dataset"],
-            model_path=ds["model_path"],
-            support_df=train_df,
-        )
+    for ds in datasets_to_test:
+        if os.path.exists(ds["model_path"]) and os.path.exists(ds["test_npz"]):
+            run_benchmark(ds["name"], ds["model_path"], ds["test_npz"])
+        else:
+            print(f"Skipping {ds['name']}: Missing model or test file.")

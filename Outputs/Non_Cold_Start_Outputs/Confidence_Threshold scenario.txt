@@ -1,0 +1,182 @@
+
+OPTIMAL threshold
+------------------------------------------------------------
+(social_media_mining_env) PS C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project> python confidence_test.py
+============================================================
+  DATASET: BANK  [baseline]
+============================================================
+  [Groups] {'Profile': 8, 'Contract': 2, 'Billing': 2, 'Usage': 4}
+  Feature columns : 16
+  Group sizes     : {'Profile': 8, 'Contract': 2, 'Billing': 2, 'Usage': 4}
+  Test samples    : 1249
+  Class dist      : Counter({np.int64(0): 1006, np.int64(1): 243})
+
+  Trainable parameters : 56,713
+
+  ── At default threshold (0.50) ──
+  Accuracy  : 0.9976
+  Precision : 0.9878
+  Recall    : 1.0000
+  F1        : 0.9939
+  AUC       : 0.9983
+
+  ── At optimal threshold (0.21) ──
+  Accuracy  : 0.9976
+  Precision : 0.9878
+  Recall    : 1.0000
+  F1        : 0.9939
+  AUC       : 0.9983  (unchanged — threshold-independent)
+
+  Classification report (threshold=0.50):
+              precision    recall  f1-score   support
+
+    No Churn       1.00      1.00      1.00      1006
+       Churn       0.99      1.00      0.99       243
+
+    accuracy                           1.00      1249
+   macro avg       0.99      1.00      1.00      1249
+weighted avg       1.00      1.00      1.00      1249
+
+  Classification report (threshold=0.21):
+              precision    recall  f1-score   support
+
+    No Churn       1.00      1.00      1.00      1006
+       Churn       0.99      1.00      0.99       243
+
+    accuracy                           1.00      1249
+   macro avg       0.99      1.00      1.00      1249
+weighted avg       1.00      1.00      1.00      1249
+
+  Inference time : 0.0288 seconds (1249 samples)
+  Per-sample     : 0.0231 ms/sample
+  Parameters     : 56,713
+
+  Confusion matrices saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/baseline
+
+============================================================
+  DATASET: TELCO1  [baseline]
+============================================================
+  [Groups] {'Profile': 10, 'Contract': 10, 'Billing': 11, 'Usage': 19}
+  Feature columns : 50
+  Group sizes     : {'Profile': 10, 'Contract': 10, 'Billing': 11, 'Usage': 19}
+  Test samples    : 932
+  Class dist      : Counter({np.int64(0): 727, np.int64(1): 205})
+
+  Trainable parameters : 61,065
+
+  ── At default threshold (0.50) ──
+  Accuracy  : 0.9614
+  Precision : 0.9378
+  Recall    : 0.8829
+  F1        : 0.9095
+  AUC       : 0.9869
+
+  ── At optimal threshold (0.55) ──
+  Accuracy  : 0.9657
+  Precision : 0.9626
+  Recall    : 0.8780
+  F1        : 0.9184
+  AUC       : 0.9869  (unchanged — threshold-independent)
+
+  Classification report (threshold=0.50):
+              precision    recall  f1-score   support
+
+    No Churn       0.97      0.98      0.98       727
+       Churn       0.94      0.88      0.91       205
+
+    accuracy                           0.96       932
+   macro avg       0.95      0.93      0.94       932
+weighted avg       0.96      0.96      0.96       932
+
+  Classification report (threshold=0.55):
+              precision    recall  f1-score   support
+
+    No Churn       0.97      0.99      0.98       727
+       Churn       0.96      0.88      0.92       205
+
+    accuracy                           0.97       932
+   macro avg       0.96      0.93      0.95       932
+weighted avg       0.97      0.97      0.97       932
+
+  Inference time : 0.0040 seconds (932 samples)
+  Per-sample     : 0.0043 ms/sample
+  Parameters     : 61,065
+
+  Confusion matrices saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/baseline
+
+============================================================
+  DATASET: TELCO2  [baseline]
+============================================================
+  [Groups] {'Profile': 5, 'Contract': 7, 'Billing': 7, 'Usage': 22}
+  Feature columns : 41
+  Group sizes     : {'Profile': 5, 'Contract': 7, 'Billing': 7, 'Usage': 22}
+  Test samples    : 963
+  Class dist      : Counter({np.int64(0): 740, np.int64(1): 223})
+
+  Trainable parameters : 59,913
+
+  ── At default threshold (0.50) ──
+  Accuracy  : 0.7902
+  Precision : 0.6082
+  Recall    : 0.2646
+  F1        : 0.3688
+  AUC       : 0.8260
+
+  ── At optimal threshold (0.37) ──
+  Accuracy  : 0.7664
+  Precision : 0.4971
+  Recall    : 0.7803
+  F1        : 0.6073
+  AUC       : 0.8260  (unchanged — threshold-independent)
+
+  Classification report (threshold=0.50):
+              precision    recall  f1-score   support
+
+    No Churn       0.81      0.95      0.87       740
+       Churn       0.61      0.26      0.37       223
+
+    accuracy                           0.79       963
+   macro avg       0.71      0.61      0.62       963
+weighted avg       0.76      0.79      0.76       963
+
+  Classification report (threshold=0.37):
+              precision    recall  f1-score   support
+
+    No Churn       0.92      0.76      0.83       740
+       Churn       0.50      0.78      0.61       223
+
+    accuracy                           0.77       963
+   macro avg       0.71      0.77      0.72       963
+weighted avg       0.82      0.77      0.78       963
+
+  Inference time : 0.0050 seconds (963 samples)
+  Per-sample     : 0.0052 ms/sample
+  Parameters     : 59,913
+
+  Confusion matrices saved → C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project/checkpoints/baseline
+
+============================================================
+  ALL DATASETS COMPLETE
+============================================================
+(social_media_mining_env) PS C:\Users\T-Plug\Desktop\ML_Mini_Project\hybrid_churn_prediction_project> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

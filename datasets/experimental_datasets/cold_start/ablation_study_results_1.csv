@@ -1,0 +1,19 @@
+Dataset,Variant,Macro F1,ROC-AUC,ECE,"Train Time (s, avg)",Inference (ms/episode),Params,N Seeds
+telco1,Full (MPMN+VML),62.39% (±4.92 seed-std),68.59% (±6.68 seed-std),0.1895,160.7,3.82,"11,201",3
+telco1,No Temperature Scaling,56.56% (±1.03 seed-std),60.28% (±1.23 seed-std),0.2544,124.6,2.68,"11,201",3
+telco1,No Uncertainty Weighting,65.99% (±2.68 seed-std),71.49% (±4.48 seed-std),0.1459,119.0,2.65,"11,201",3
+telco1,No KL Regularization,63.93% (±5.09 seed-std),69.41% (±6.35 seed-std),0.1841,174.8,3.65,"11,201",3
+telco1,No Variational Path (Point Estimate),66.51% (±0.51 seed-std),72.20% (±1.94 seed-std),0.1513,117.1,2.08,"11,201",3
+telco1,Vanilla ProtoNet (floor),67.18% (±0.74 seed-std),71.13% (±0.26 seed-std),0.1546,98.6,1.98,"11,201",3
+telco2,Full (MPMN+VML),63.26% (±0.87 seed-std),70.46% (±0.87 seed-std),0.1770,131.9,1.30,"2,913",3
+telco2,No Temperature Scaling,60.50% (±1.22 seed-std),66.15% (±1.66 seed-std),0.2206,108.1,1.23,"2,913",3
+telco2,No Uncertainty Weighting,66.41% (±0.53 seed-std),72.57% (±1.04 seed-std),0.1654,102.8,1.17,"2,913",3
+telco2,No KL Regularization,62.20% (±0.62 seed-std),69.44% (±0.43 seed-std),0.1734,133.1,1.26,"2,913",3
+telco2,No Variational Path (Point Estimate),67.68% (±1.38 seed-std),75.06% (±0.90 seed-std),0.1569,85.6,1.02,"2,913",3
+telco2,Vanilla ProtoNet (floor),68.07% (±1.39 seed-std),75.23% (±0.69 seed-std),0.1584,86.1,1.20,"2,913",3
+bank,Full (MPMN+VML),56.75% (±1.86 seed-std),72.74% (±0.86 seed-std),0.2346,173.2,3.59,"9,665",3
+bank,No Temperature Scaling,54.24% (±1.33 seed-std),66.03% (±1.69 seed-std),0.2773,152.8,3.44,"9,665",3
+bank,No Uncertainty Weighting,51.71% (±2.12 seed-std),70.97% (±0.59 seed-std),0.2409,134.9,3.32,"9,665",3
+bank,No KL Regularization,55.09% (±2.25 seed-std),71.58% (±1.44 seed-std),0.2351,166.8,3.44,"9,665",3
+bank,No Variational Path (Point Estimate),49.07% (±4.78 seed-std),71.26% (±0.67 seed-std),0.2469,116.3,2.15,"9,665",3
+bank,Vanilla ProtoNet (floor),49.16% (±4.62 seed-std),71.07% (±0.46 seed-std),0.2470,112.6,2.10,"9,665",3

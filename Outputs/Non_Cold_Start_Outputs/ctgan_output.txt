@@ -1,0 +1,141 @@
+============================================================
+  CTGAN AUGMENTATION — bank
+============================================================
+
+[CTGAN] Real cold-start train  : 1171
+[CTGAN] Features              : 16
+[CTGAN] Churn rate (real)      : 24.9%
+[CTGAN] Tenure col             : 'Tenure' at index 5
+
+[CTGAN] Target augmented size  : 3000
+[CTGAN] Synthetic needed       : 1829
+[CTGAN] Training CTGAN (300 epochs)...
+[CTGAN] Expected time: 5–15 minutes on CPU.
+
+Gen. (-01.96) | Discrim. (-00.09): 100%|██████████████████████████████████████████████████████████████████████████████████| 300/300 [01:03<00:00,  4.69it/s]
+
+[CTGAN] Model saved → ../../models/ctgan\ctgan_bank.pkl
+
+[CTGAN] Generating 18290 synthetic rows...
+[CTGAN] Tenure col: 'Tenure' | norm threshold: 0.0378
+[CTGAN] After cold-start filter: 18290 / 18290 (100.0%)
+
+[CTGAN] Real:      1171 rows | churn: 24.9%
+[CTGAN] Synthetic: 1829 rows | churn: 19.2%
+[CTGAN] Combined:  3000 rows | churn: 21.4%
+
+[CTGAN] Saved → ../../datasets/processed/bank/mpmn_ready\train_augmented.npz
+[CTGAN] Feature set unchanged from feature_names.json — 16 features.
+[CTGAN] val.npz and test.npz are untouched — real data only.
+
+[CTGAN] Running TSTR quality check...
+  TRTR AUC (train real, test real) : 81.99%  [reference]
+  TSTR AUC (train aug,  test real) : 81.73%  [quality check]
+  Gap: -0.26%
+  [GOOD] AUC gap <= 5%
+
+============================================================
+  AUGMENTATION COMPLETE — bank
+  Features used  : 16
+  Real           : 1171
+  Synthetic      : 1829
+  Combined       : 3000
+  Churn (aug)    : 21.4%
+  Saved          : ../../datasets/processed/bank/mpmn_ready\train_augmented.npz
+============================================================
+
+
+============================================================
+  CTGAN AUGMENTATION — telco1
+============================================================
+
+[CTGAN] Real cold-start train  : 584
+[CTGAN] Features              : 40
+[CTGAN] Churn rate (real)      : 60.1%
+[CTGAN] Tenure col             : 'Tenure in Months' at index 6
+
+[CTGAN] Target augmented size  : 1500
+[CTGAN] Synthetic needed       : 916
+[CTGAN] Training CTGAN (300 epochs)...
+[CTGAN] Expected time: 5–15 minutes on CPU.
+
+Gen. (-01.96) | Discrim. (+00.39): 100%|██████████████████████████████████████████████████████████████████████████████████| 300/300 [00:55<00:00,  5.37it/s]
+
+[CTGAN] Model saved → ../../models/ctgan\ctgan_telco1.pkl
+
+[CTGAN] Generating 9160 synthetic rows...
+[CTGAN] Tenure col: 'Tenure in Months' | norm threshold: 0.0378
+[CTGAN] After cold-start filter: 9160 / 9160 (100.0%)
+
+[CTGAN] Real:      584 rows | churn: 60.1%
+[CTGAN] Synthetic: 916 rows | churn: 53.7%
+[CTGAN] Combined:  1500 rows | churn: 56.2%
+
+[CTGAN] Saved → ../../datasets/processed/telco1/mpmn_ready\train_augmented.npz
+[CTGAN] Feature set unchanged from feature_names.json — 40 features.
+[CTGAN] val.npz and test.npz are untouched — real data only.
+
+[CTGAN] Running TSTR quality check...
+  TRTR AUC (train real, test real) : 75.13%  [reference]
+  TSTR AUC (train aug,  test real) : 76.13%  [quality check]
+  Gap: +1.00%
+  [GOOD] AUC gap <= 5%
+
+============================================================
+  AUGMENTATION COMPLETE — telco1
+  Features used  : 40
+  Real           : 584
+  Synthetic      : 916
+  Combined       : 1500
+  Churn (aug)    : 56.2%
+  Saved          : ../../datasets/processed/telco1/mpmn_ready\train_augmented.npz
+============================================================
+
+
+============================================================
+  CTGAN AUGMENTATION — telco2
+============================================================
+
+[CTGAN] Real cold-start train  : 436
+[CTGAN] Features              : 20
+[CTGAN] Churn rate (real)      : 61.0%
+[CTGAN] Tenure col             : 'tenure' at index 1
+
+[CTGAN] Target augmented size  : 1800
+[CTGAN] Synthetic needed       : 1364
+[CTGAN] Training CTGAN (300 epochs)...
+[CTGAN] Expected time: 5–15 minutes on CPU.
+
+Gen. (-00.99) | Discrim. (+00.03): 100%|████████████████████████████████████████████████████████████████████████████████████████████████████| 300/300 [00:28<00:00, 10.45it/s]
+
+[CTGAN] Model saved → ../../models/ctgan\ctgan_telco2.pkl
+
+[CTGAN] Generating 13640 synthetic rows...
+[CTGAN] Tenure col: 'tenure' | norm threshold: 0.0378
+[CTGAN] After cold-start filter: 13640 / 13640 (100.0%)
+
+[CTGAN] Real:      436 rows | churn: 61.0%
+[CTGAN] Synthetic: 1364 rows | churn: 71.4%
+[CTGAN] Combined:  1800 rows | churn: 68.9%
+
+[CTGAN] Churn gap 10.4pp > 10pp — rebalancing synthetic portion...
+[CTGAN] After rebalancing: 1436 rows | churn: 61.0%
+
+[CTGAN] Saved → ../../datasets/processed/telco2/mpmn_ready\train_augmented.npz
+[CTGAN] Feature set unchanged from feature_names.json — 20 features.
+[CTGAN] val.npz and test.npz are untouched — real data only.
+
+[CTGAN] Running TSTR quality check...
+  TRTR AUC (train real, test real) : 70.03%  [reference]
+  TSTR AUC (train aug,  test real) : 68.87%  [quality check]
+  Gap: -1.16%
+  [GOOD] AUC gap <= 5%
+
+============================================================
+  AUGMENTATION COMPLETE — telco2
+  Features used  : 20
+  Real           : 436
+  Synthetic      : 1364
+  Combined       : 1436
+  Churn (aug)    : 61.0%
+  Saved          : ../../datasets/processed/telco2/mpmn_ready\train_augmented.npz

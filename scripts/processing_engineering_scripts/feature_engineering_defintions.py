@@ -1,71 +1,80 @@
 """
-EstablishedFeatureEngineer -- Non-Cold-Start Feature Engineering
-================================================================
-Encoding and scaling rules per dataset:
+feature_engineering_definitions.py
 
-BANK
-  - Drop:          Satisfaction Score
-  - Keep as-is:    NumOfProducts (no clipping)
-  - No derived:    has_zero_balance NOT created
-  - No log1p:      all features encoded/scaled raw
-  - Ordinal:       Card Type  (Silver=1, Gold=2, Platinum=3, Diamond=4)
-  - Binary:        Gender (Male=0, Female=1)
-  - One-hot:       Geography (all dummies, drop_first=False)
-  - StandardScaler: CreditScore, Age, Tenure, Balance, EstimatedSalary, Point Earned
-  - (Tenure is StandardScaler, NOT MinMaxScaler)
+Feature engineering definitions for both model paths:
 
-TELCO 1
-  - Drop:          Satisfaction Score
-  - No log1p:      all features scaled raw
-  - Binary:        Gender, Married, Dependents, Referred a Friend, Phone Service,
-                   Multiple Lines, Internet Service, Online Security, Online Backup,
-                   Device Protection Plan, Premium Tech Support, Streaming TV,
-                   Streaming Movies, Streaming Music, Unlimited Data, Paperless Billing
-                   (flat binary -- Yes=1/No=0, no ternary expansion)
-  - fillna:        Internet Type -> "No Internet", Offer -> "No Offer"
-  - One-hot:       Offer, Internet Type, Contract, Payment Method (all dummies, drop_first=False)
-  - StandardScaler: Age, Number of Dependents, Number of Referrals, Tenure in Months,
-                    Avg Monthly Long Distance Charges, Avg Monthly GB Download,
-                    Monthly Charge, Total Charges, Total Refunds,
-                    Total Extra Data Charges, Total Long Distance Charges
-  - (Tenure in Months is StandardScaler, NOT MinMaxScaler)
+    1. ColdStartFeatureEngineer
+       - Used by the MPMN cold-start path.
+       - FITS on non-cold-start TRAINING data.
+       - TRANSFORMS cold-start train/val/test data using those learned
+         parameters.
 
-TELCO 2
-  - No log1p:      TotalCharges scaled raw
-  - Binary:        gender, Partner, Dependents, PaperlessBilling, PhoneService
-                   (flat binary -- no ternary expansion)
-  - One-hot:       InternetService, Contract, PaymentMethod, OnlineSecurity,
-                   TechSupport, MultipleLines, OnlineBackup, DeviceProtection,
-                   StreamingTV, StreamingMovies, SeniorCitizen
-                   (all dummies, drop_first=False -- including SeniorCitizen as one-hot)
-  - StandardScaler: tenure, MonthlyCharges, TotalCharges
-  - (tenure is StandardScaler, NOT MinMaxScaler)
+    2. EstablishedFeatureEngineer
+       - Used by the GATEFuse non-cold-start path.
+       - FITS on non-cold-start TRAINING data.
+       - TRANSFORMS non-cold-start validation/test data.
+
+IMPORTANT
+---------
+The executable code and DATASET_CONFIG below are the source of truth.
+Documentation/specification comments must not override the actual
+configuration.
+
+In particular:
+    - Bank Complain is KEPT.
+    - Bank Satisfaction Score is KEPT.
+    - is_cold_start is removed from GATEFuse features.
+    - Configured Telco1 features remain configured.
 """
 
+
+# =============================================================================
+# IMPORTS
+# =============================================================================
+
 import os
+import warnings
+import joblib
+
 import numpy as np
 import pandas as pd
-import joblib
-import warnings
+
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+
 
 warnings.filterwarnings("ignore")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SHARED UTILITIES
-# ─────────────────────────────────────────────────────────────────────────────
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
-
-def _safe_log1p(series: pd.Series) -> pd.Series:
-    """log1p transform, safe against negatives (clips to 0 first)."""
-    return np.log1p(series.clip(lower=0))
-
-
-def _encode_binary(series: pd.Series) -> pd.Series:
+def _safe_log1p(series):
     """
-    Maps Yes/No, Male/Female, True/False strings and existing 0/1 ints
-    to clean 0/1 integers. Unknown values become NaN (caught downstream).
+    Apply log1p safely.
+
+    Negative values are clipped to zero before applying log1p.
+    """
+    numeric = pd.to_numeric(
+        series,
+        errors="coerce"
+    )
+
+    return np.log1p(
+        numeric.clip(lower=0)
+    )
+
+
+def _encode_binary(series):
+    """
+    Binary encoding used by the ColdStartFeatureEngineer.
+
+    IMPORTANT:
+    This preserves the existing cold-start implementation:
+        Yes/True/1   -> 1
+        No/False/0   -> 0
+        Male         -> 1
+        Female       -> 0
     """
     mapping = {
         "yes": 1,
@@ -79,381 +88,1707 @@ def _encode_binary(series: pd.Series) -> pd.Series:
         1: 1,
         0: 0,
     }
-    return series.map(lambda x: mapping.get(str(x).lower().strip(), np.nan))
+
+    def encode_value(value):
+        if pd.isna(value):
+            return np.nan
+
+        if value in mapping:
+            return mapping[value]
+
+        value_string = str(value).strip().lower()
+
+        if value_string in mapping:
+            return mapping[value_string]
+
+        return value
+
+    return series.map(encode_value)
 
 
-def _encode_contract(series: pd.Series) -> pd.Series:
-    """Ordinal: Month-to-Month=0, One Year=1, Two Year=2."""
+def _encode_contract(series):
+    """
+    Encode contract duration ordinally.
+
+    Month-to-Month -> 0
+    One Year       -> 1
+    Two Year       -> 2
+    """
     mapping = {
-        "month-to-month": 0,
-        "one year": 1,
-        "two year": 2,
-        # Telco 2 variants
+        "Month-to-Month": 0,
+        "One Year": 1,
+        "Two Year": 2,
         "month to month": 0,
     }
-    return series.map(lambda x: mapping.get(str(x).lower().strip(), 0))
+
+    def encode_value(value):
+        if pd.isna(value):
+            return np.nan
+
+        if value in mapping:
+            return mapping[value]
+
+        value_string = str(value).strip()
+        value_lower = value_string.lower()
+
+        if value_lower in {
+            "month-to-month",
+            "month to month",
+        }:
+            return 0
+
+        if value_lower == "one year":
+            return 1
+
+        if value_lower == "two year":
+            return 2
+
+        return value
+
+    return series.map(encode_value)
 
 
-def _encode_ternary_service(series: pd.Series) -> pd.DataFrame:
+def _encode_ternary_service(series, column_name):
     """
-    Converts Yes / No / No <Service> ternary columns to two binary columns:
-      - has_<col>    : 1 if Yes
-      - no_service_<col>: 1 if 'No <Service>' (i.e., can't get it, not just doesn't want it)
-    Dropping the plain 'No' case as the reference category.
-    """
-    col_name = series.name if hasattr(series, "name") else "feature"
-    has_col = f"has_{col_name}".replace(" ", "_").lower()
-    no_svc_col = f"no_svc_{col_name}".replace(" ", "_").lower()
+    Convert a three-state service variable into two binary variables.
 
-    has_vals = series.map(lambda x: 1 if str(x).lower().strip() == "yes" else 0)
-    no_svc_vals = series.map(
-        lambda x: (
-            1 if ("no " in str(x).lower() and str(x).lower().strip() != "no") else 0
-        )
+    Example:
+
+        Yes                   -> has_X = 1, no_svc_X = 0
+        No                    -> has_X = 0, no_svc_X = 1
+        No internet service   -> has_X = 0, no_svc_X = 1
+        No phone service      -> has_X = 0, no_svc_X = 1
+    """
+
+    values = (
+        series
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.lower()
     )
-    return pd.DataFrame({has_col: has_vals, no_svc_col: no_svc_vals})
+
+    has_service = (
+        values.eq("yes")
+        .astype(int)
+    )
+
+    no_service = (
+        values.isin(
+            [
+                "no",
+                "no internet service",
+                "no phone service",
+                "none",
+                "",
+            ]
+        )
+        .astype(int)
+    )
+
+    return pd.DataFrame(
+        {
+            f"has_{column_name}": has_service,
+            f"no_svc_{column_name}": no_service,
+        },
+        index=series.index,
+    )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1. COLD-START ENGINEER  (MPMN / Few-Shot Path)
-# ─────────────────────────────────────────────────────────────────────────────
-
+# =============================================================================
+# COLD-START FEATURE ENGINEER
+# =============================================================================
 
 class ColdStartFeatureEngineer:
     """
-    Phase 2a: Cold-Start Feature Engineering for the MPMN (Prototypical Network).
+    Feature engineering for the MPMN cold-start path.
 
-    Strategy:
-      1. Explicit, rule-based encoding per feature type (not target encoding
-         for low/medium cardinality features — see explanation below).
-      2. log1p transform for right-skewed continuous features.
-      3. StandardScaler for most continuous; MinMaxScaler for bounded ranges.
-      4. Fit scaler on NON-COLD data (transfer learning) — transform cold users
-         using those learned parameters.
-      5. Correlation filter (>0.95) to remove redundant numeric features.
+    IMPORTANT FITTING STRATEGY
+    ---------------------------
+    The engineer is fitted on NON-COLD-START training data.
 
-    Why NOT target encoding for binary/low-cardinality features:
-      - MPMN constructs class prototypes by averaging embeddings. Target-encoded
-        features are pre-told the answer, which collapses the metric space.
-      - On small support sets (5–10 samples per class during episodic training),
-        target encoding produces extremely noisy / overfit encodings.
-      - Explicit 0/1 and one-hot encodings give the network a stable geometric
-        structure to learn meaningful distances over.
+    It is then used to transform:
+        - cold-start train
+        - cold-start validation
+        - cold-start test
 
-    Target encoding is ONLY used for genuinely high-cardinality nominals (7+
-    categories) where one-hot would explode the feature count.
+    This implements the intended transfer-learning approach where the
+    cold-start population receives preprocessing parameters learned from
+    established/non-cold-start customers.
     """
 
-    def __init__(self, dataset_type: str = "telco"):
+    def __init__(
+        self,
+        dataset_type,
+        correlation_threshold=0.95,
+    ):
         self.dataset_type = dataset_type.lower()
+
+        self.correlation_threshold = (
+            correlation_threshold
+        )
+
         self.fitted = False
 
-        # Scalers: one standard for most, one minmax for bounded features
         self.standard_scaler = StandardScaler()
-        self.minmax_scaler = MinMaxScaler(feature_range=(0, 1))
-        self.standard_cols: list = []
-        self.minmax_cols: list = []
+        self.minmax_scaler = MinMaxScaler()
 
-        # Correlation filter
-        self.drop_corr_cols: list = []
+        self.standard_cols = []
+        self.minmax_cols = []
 
-        # One-hot categories (fit-time learned categories)
-        self.ohe_categories: dict = {}  # col → list of known categories
+        self.ohe_categories = {}
 
-        # Target encoding fallback for high-cardinality only
-        self.target_maps: dict = {}
+        self.feature_names_out = []
 
-        self.feature_names_out: list = []
+        self.correlation_columns_to_drop = []
 
-        # ── FEATURE CONFIGS ───────────────────────────────────────────────────
-        # Only features legitimately available at customer acquisition time.
-        # Total Charges / accumulated billing features are excluded for cold path
-        # because cold users have < 2 months of history (essentially 0).
+        self.target_maps = {}
 
-        self.bank_config = {
-            "standard": [
-                "CreditScore",
-                "Age",
-                "Balance",
-                "EstimatedSalary",
-                "Point Earned",
-            ],
-            "minmax": ["Tenure"],
-            "binary": ["HasCrCard", "IsActiveMember", "Gender"],
-            "ordinal_bin": ["NumOfProducts"],  # bin 3+ → 3
-            "ohe": ["Geography", "Card Type"],
-            "engineered": ["has_zero_balance"],  # derived in _engineer()
-            "target_enc": [],  # none needed for bank
+        self.config = self._get_config()
+
+    # =========================================================================
+    # CONFIGURATION
+    # =========================================================================
+
+    def _get_config(self):
+
+        configs = {
+
+            # -----------------------------------------------------------------
+            # BANK
+            # -----------------------------------------------------------------
+
+            "bank": {
+                "standard": [
+                    "CreditScore",
+                    "Age",
+                    "Balance",
+                    "EstimatedSalary",
+                    "Point Earned",
+                ],
+
+                "minmax": [
+                    "Tenure",
+                ],
+
+                "binary": [
+                    "HasCrCard",
+                    "IsActiveMember",
+                    "Gender",
+                ],
+
+                "ordinal_bin": [
+                    "NumOfProducts",
+                ],
+
+                "ohe": [
+                    "Geography",
+                    "Card Type",
+                ],
+
+                "engineered": [
+                    "has_zero_balance",
+                ],
+
+                "target_enc": [],
+            },
+
+            # -----------------------------------------------------------------
+            # TELCO 1
+            # -----------------------------------------------------------------
+
+            "telco1": {
+                "standard": [
+                    "Age",
+                    "Number of Dependents",
+                    "Number of Referrals",
+                    "Avg Monthly Long Distance Charges",
+                    "Avg Monthly GB Download",
+                    "Monthly Charge",
+                ],
+
+                "minmax": [
+                    "Tenure in Months",
+                ],
+
+                "binary": [
+                    "Gender",
+                    "Married",
+                    "Phone Service",
+                    "Paperless Billing",
+                ],
+
+                "contract": [
+                    "Contract",
+                ],
+
+                "ohe": [
+                    "Offer",
+                    "Internet Type",
+                    "Payment Method",
+                    "Internet Service",
+                ],
+
+                "ternary": [
+                    "Multiple Lines",
+                    "Online Security",
+                    "Online Backup",
+                    "Device Protection Plan",
+                    "Premium Tech Support",
+                    "Streaming TV",
+                    "Streaming Movies",
+                    "Streaming Music",
+                    "Unlimited Data",
+                ],
+
+                "target_enc": [],
+            },
+
+            # -----------------------------------------------------------------
+            # TELCO 2
+            # -----------------------------------------------------------------
+
+            "telco2": {
+                "standard": [
+                    "MonthlyCharges",
+                ],
+
+                "minmax": [
+                    "tenure",
+                ],
+
+                "binary": [
+                    "gender",
+                    "SeniorCitizen",
+                    "Partner",
+                    "Dependents",
+                    "PhoneService",
+                    "PaperlessBilling",
+                ],
+
+                "contract": [
+                    "Contract",
+                ],
+
+                "ohe": [
+                    "InternetService",
+                    "PaymentMethod",
+                ],
+
+                "ternary": [
+                    "MultipleLines",
+                    "OnlineSecurity",
+                    "OnlineBackup",
+                    "DeviceProtection",
+                    "TechSupport",
+                    "StreamingTV",
+                    "StreamingMovies",
+                ],
+
+                "target_enc": [],
+            },
         }
 
-        self.telco1_config = {
-            "standard": [
-                "Age",
-                "Number of Dependents",
-                "Number of Referrals",  # log1p applied first
-                "Avg Monthly Long Distance Charges",
-                "Avg Monthly GB Download",  # log1p applied first
-                "Monthly Charge",
-            ],
-            "minmax": ["Tenure in Months"],
-            "binary": ["Gender", "Married", "Phone Service", "Paperless Billing"],
-            "contract": ["Contract"],  # ordinal 0/1/2
-            "ohe": ["Offer", "Internet Type", "Payment Method", "Internet Service"],
-            "ternary": [  # → 2 binary cols each
-                "Multiple Lines",
-                "Online Security",
-                "Online Backup",
-                "Device Protection Plan",
-                "Premium Tech Support",
-                "Streaming TV",
-                "Streaming Movies",
-                "Streaming Music",
-                "Unlimited Data",
-            ],
-            "target_enc": [],
-        }
+        if self.dataset_type not in configs:
+            raise ValueError(
+                f"Unsupported dataset_type '{self.dataset_type}'. "
+                f"Expected one of: {list(configs.keys())}"
+            )
 
-        self.telco2_config = {
-            "standard": ["MonthlyCharges"],
-            "minmax": ["tenure"],
-            "binary": [
-                "gender",
-                "SeniorCitizen",
-                "Partner",
-                "Dependents",
-                "PhoneService",
-                "PaperlessBilling",
-            ],
-            "contract": ["Contract"],
-            "ohe": ["InternetService", "PaymentMethod"],
-            "ternary": [
-                "MultipleLines",
-                "OnlineSecurity",
-                "OnlineBackup",
-                "DeviceProtection",
-                "TechSupport",
-                "StreamingTV",
-                "StreamingMovies",
-            ],
-            "target_enc": [],
-        }
+        return configs[self.dataset_type]
 
-    def _get_config(self) -> dict:
-        if "bank" in self.dataset_type:
-            return self.bank_config
-<<<<<<< HEAD
-        elif "telco_2" in self.dataset_type or "telco2" in self.dataset_type:
-=======
-        elif "telco2" in self.dataset_type:
->>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
-            return self.telco2_config
-        else:
-            return self.telco1_config
+    # =========================================================================
+    # FEATURE ENGINEERING
+    # =========================================================================
 
-    # ── Engineering helpers ───────────────────────────────────────────────────
+    def _engineer_features(self, df):
+        """
+        Create engineered features before encoding/scaling.
+        """
 
-    def _engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Add derived features before encoding."""
-        df = df.copy()
+        X = df.copy()
 
-        # Bank: flag for structural zero balance (36% of customers)
-        if "Balance" in df.columns:
-            df["has_zero_balance"] = (df["Balance"] == 0).astype(int)
+        # ---------------------------------------------------------------------
+        # Bank: zero-balance indicator
+        # ---------------------------------------------------------------------
 
-        # Bank: bin NumOfProducts 3 & 4 → 3 (marginal categories)
-        if "NumOfProducts" in df.columns:
-            df["NumOfProducts"] = df["NumOfProducts"].clip(upper=3)
+        if "Balance" in X.columns:
 
-        # Telco: log1p skewed features before scaling
-        for col in [
+            balance = pd.to_numeric(
+                X["Balance"],
+                errors="coerce"
+            )
+
+            X["has_zero_balance"] = (
+                balance
+                .fillna(0)
+                .eq(0)
+                .astype(int)
+            )
+
+        # ---------------------------------------------------------------------
+        # Bank: cap NumOfProducts at 3
+        # ---------------------------------------------------------------------
+
+        if "NumOfProducts" in X.columns:
+
+            X["NumOfProducts"] = (
+                pd.to_numeric(
+                    X["NumOfProducts"],
+                    errors="coerce"
+                )
+                .clip(upper=3)
+            )
+
+        # ---------------------------------------------------------------------
+        # Existing log transformations
+        # ---------------------------------------------------------------------
+
+        log_columns = [
             "Number of Referrals",
             "Avg Monthly GB Download",
             "Total Charges",
             "TotalCharges",
-        ]:
-            if col in df.columns:
-                df[col] = _safe_log1p(df[col].fillna(0))
+        ]
 
-        return df
+        for column in log_columns:
 
-    def _apply_encoding(self, df: pd.DataFrame, config: dict, fit: bool) -> tuple:
+            if column in X.columns:
+                X[column] = _safe_log1p(
+                    X[column]
+                )
+
+        return X
+
+    # =========================================================================
+    # ENCODING
+    # =========================================================================
+
+    def _apply_encoding(
+        self,
+        X,
+        fit=False,
+    ):
         """
-        Applies all encoding steps and returns a numpy array.
-        If fit=True, learns categories/parameters. If False, transforms only.
+        Apply scaling, binary encoding, contract encoding,
+        one-hot encoding, ternary service encoding, and
+        ordinal processing.
         """
-        parts = []
-        col_names = []
 
-        # 1. Standard-scaled continuous
-        std_cols = [c for c in config.get("standard", []) if c in df.columns]
-        if std_cols:
-            X_std = df[std_cols].fillna(0).values.astype(float)
-            if fit:
-                self.standard_cols = std_cols
-                X_std = self.standard_scaler.fit_transform(X_std)
-            else:
-                X_std = self.standard_scaler.transform(X_std)
-            parts.append(X_std)
-            col_names.extend(std_cols)
+        X = X.copy()
 
-        # 2. MinMax-scaled bounded continuous
-        mm_cols = [c for c in config.get("minmax", []) if c in df.columns]
-        if mm_cols:
-            X_mm = df[mm_cols].fillna(0).values.astype(float)
-            if fit:
-                self.minmax_cols = mm_cols
-                X_mm = self.minmax_scaler.fit_transform(X_mm)
-            else:
-                X_mm = self.minmax_scaler.transform(X_mm)
-            parts.append(X_mm)
-            col_names.extend(mm_cols)
+        # ---------------------------------------------------------------------
+        # STANDARD SCALING
+        # ---------------------------------------------------------------------
 
-        # 3. Binary encoding (Yes/No strings → 0/1)
-        for col in config.get("binary", []):
-            if col in df.columns:
-                encoded = _encode_binary(df[col]).fillna(0).values.reshape(-1, 1)
-                parts.append(encoded)
-                col_names.append(col)
+        standard_cols = [
+            column
+            for column in self.config.get(
+                "standard",
+                []
+            )
+            if column in X.columns
+        ]
 
-        # 4. Contract ordinal encoding
-        for col in config.get("contract", []):
-            if col in df.columns:
-                encoded = _encode_contract(df[col]).values.reshape(-1, 1)
-                parts.append(encoded)
-                col_names.append(col)
+        if standard_cols:
 
-        # 5. One-Hot encoding for nominal categoricals
-        for col in config.get("ohe", []):
-            if col not in df.columns:
-                continue
-            # Apply dataset-specific fillna before OHE (e.g. Offer, Internet Type for telco1)
-            if col == "Offer" and "telco1" in self.dataset_type:
-                series = df[col].fillna("No Offer").astype(str)
-            elif col == "Internet Type" and "telco1" in self.dataset_type:
-                series = df[col].fillna("No Internet").astype(str)
-            else:
-                series = df[col].fillna("Unknown").astype(str)
-            if fit:
-                cats = sorted(series.unique().tolist())
-                self.ohe_categories[col] = cats
-            cats = self.ohe_categories.get(col, [])
-            # Encode: one column per category except the first (reference)
-            for cat in cats[1:]:
-                parts.append((series == cat).astype(int).values.reshape(-1, 1))
-                col_names.append(f"{col}_{cat}")
-
-        # 6. Ternary service features → 2 binary columns each
-        for col in config.get("ternary", []):
-            if col not in df.columns:
-                continue
-            df_tern = _encode_ternary_service(df[col].fillna("No"))
-            parts.append(df_tern.values)
-            col_names.extend(df_tern.columns.tolist())
-
-        # 7. Engineered features (already added by _engineer_features)
-        for col in config.get("engineered", []):
-            if col in df.columns:
-                parts.append(df[col].fillna(0).values.reshape(-1, 1))
-                col_names.append(col)
-
-        # 8. Ordinal bin features
-        for col in config.get("ordinal_bin", []):
-            if col in df.columns:
-                parts.append(df[col].fillna(0).values.reshape(-1, 1))
-                col_names.append(col)
-
-        X = np.hstack(parts) if parts else np.empty((len(df), 0))
-        return X, col_names
-
-    # ── Correlation filter ────────────────────────────────────────────────────
-
-    def _fit_corr_filter(self, X: np.ndarray, col_names: list) -> list:
-        """Identifies columns with pairwise correlation > 0.95."""
-        df_X = pd.DataFrame(X, columns=col_names)
-        corr = df_X.corr().abs()
-        upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
-        drop = [c for c in upper.columns if any(upper[c] > 0.95)]
-        return drop
-
-    # ── Public API ────────────────────────────────────────────────────────────
-
-    def fit(self, df_non_cold: pd.DataFrame) -> "ColdStartFeatureEngineer":
-        """
-        Fit on non-cold (established) users.
-        Learns scaler parameters, OHE categories, and correlation filter.
-        """
-        print(f"   Fitting Cold-Start Engineer ({self.dataset_type})...")
-        config = self._get_config()
-
-        df_eng = self._engineer_features(df_non_cold)
-        X, col_names = self._apply_encoding(df_eng, config, fit=True)
-
-        # Correlation filter
-        self.drop_corr_cols = self._fit_corr_filter(X, col_names)
-        if self.drop_corr_cols:
-            print(f"      - Dropping highly correlated cols: {self.drop_corr_cols}")
-
-        self.fitted = True
-        print(f"      - Fit complete on {len(df_non_cold)} non-cold samples.")
-        return self
-
-    def transform(self, df: pd.DataFrame) -> tuple:
-        """
-        Transform a DataFrame (cold or non-cold) using fitted parameters.
-        Returns (X, y, feature_names).
-        """
-        if not self.fitted:
-            raise ValueError("Call fit() on non-cold data before transform().")
-
-        config = self._get_config()
-        df_eng = self._engineer_features(df)
-        X, col_names = self._apply_encoding(df_eng, config, fit=False)
-
-        # Apply correlation filter
-        keep_idx = [i for i, c in enumerate(col_names) if c not in self.drop_corr_cols]
-        X = X[:, keep_idx]
-        col_names = [col_names[i] for i in keep_idx]
-
-        # Extract target
-        target_col = next(
-            (t for t in ["Churn", "Exited", "Churn Label"] if t in df.columns), None
-        )
-        y = None
-        if target_col:
-            y = (
-                df[target_col]
-                .map({"Yes": 1, "No": 0, "yes": 1, "no": 0, 1: 1, 0: 0})
-                .fillna(0)
-                .values
+            X[standard_cols] = X[
+                standard_cols
+            ].apply(
+                pd.to_numeric,
+                errors="coerce",
             )
 
-        self.feature_names_out = col_names
-        _log_transform_warnings(df, col_names)
+            if fit:
 
-        return X, y, col_names
+                self.standard_scaler.fit(
+                    X[standard_cols]
+                )
+
+                self.standard_cols = (
+                    standard_cols
+                )
+
+            X[standard_cols] = (
+                self.standard_scaler.transform(
+                    X[standard_cols]
+                )
+            )
+
+        # ---------------------------------------------------------------------
+        # MIN-MAX SCALING
+        # ---------------------------------------------------------------------
+
+        minmax_cols = [
+            column
+            for column in self.config.get(
+                "minmax",
+                []
+            )
+            if column in X.columns
+        ]
+
+        if minmax_cols:
+
+            X[minmax_cols] = X[
+                minmax_cols
+            ].apply(
+                pd.to_numeric,
+                errors="coerce",
+            )
+
+            if fit:
+
+                self.minmax_scaler.fit(
+                    X[minmax_cols]
+                )
+
+                self.minmax_cols = (
+                    minmax_cols
+                )
+
+            X[minmax_cols] = (
+                self.minmax_scaler.transform(
+                    X[minmax_cols]
+                )
+            )
+
+        # ---------------------------------------------------------------------
+        # BINARY ENCODING
+        # ---------------------------------------------------------------------
+
+        for column in self.config.get(
+            "binary",
+            []
+        ):
+
+            if column in X.columns:
+
+                X[column] = _encode_binary(
+                    X[column]
+                )
+
+        # ---------------------------------------------------------------------
+        # CONTRACT ENCODING
+        # ---------------------------------------------------------------------
+
+        for column in self.config.get(
+            "contract",
+            []
+        ):
+
+            if column in X.columns:
+
+                X[column] = _encode_contract(
+                    X[column]
+                )
+
+        # ---------------------------------------------------------------------
+        # ONE-HOT ENCODING
+        # ---------------------------------------------------------------------
+
+        for column in self.config.get(
+            "ohe",
+            []
+        ):
+
+            if column not in X.columns:
+                continue
+
+            if fit:
+
+                categories = sorted(
+                    X[column]
+                    .dropna()
+                    .astype(str)
+                    .unique()
+                    .tolist()
+                )
+
+                self.ohe_categories[
+                    column
+                ] = categories
+
+            else:
+
+                categories = (
+                    self.ohe_categories.get(
+                        column,
+                        []
+                    )
+                )
+
+            # Preserve the original behavior:
+            # first learned category is omitted.
+            categories_to_create = (
+                categories[1:]
+            )
+
+            for category in categories_to_create:
+
+                dummy_name = (
+                    f"{column}_{category}"
+                )
+
+                X[dummy_name] = (
+                    X[column]
+                    .astype(str)
+                    .eq(category)
+                    .astype(int)
+                )
+
+            X.drop(
+                columns=[column],
+                inplace=True,
+            )
+
+        # ---------------------------------------------------------------------
+        # TERNARY SERVICE ENCODING
+        # ---------------------------------------------------------------------
+
+        for column in self.config.get(
+            "ternary",
+            []
+        ):
+
+            if column not in X.columns:
+                continue
+
+            encoded = (
+                _encode_ternary_service(
+                    X[column],
+                    column,
+                )
+            )
+
+            X = pd.concat(
+                [
+                    X.drop(
+                        columns=[column]
+                    ),
+                    encoded,
+                ],
+                axis=1,
+            )
+
+        # ---------------------------------------------------------------------
+        # ORDINAL BIN
+        # ---------------------------------------------------------------------
+
+        for column in self.config.get(
+            "ordinal_bin",
+            []
+        ):
+
+            if column not in X.columns:
+                continue
+
+            X[column] = (
+                pd.to_numeric(
+                    X[column],
+                    errors="coerce",
+                )
+                .clip(upper=3)
+            )
+
+        # ---------------------------------------------------------------------
+        # ENGINEERED FEATURES
+        # ---------------------------------------------------------------------
+
+        for column in self.config.get(
+            "engineered",
+            []
+        ):
+
+            if column in X.columns:
+
+                X[column] = pd.to_numeric(
+                    X[column],
+                    errors="coerce",
+                )
+
+        # ---------------------------------------------------------------------
+        # Convert remaining object columns
+        # ---------------------------------------------------------------------
+
+        for column in X.columns:
+
+            if X[column].dtype == "object":
+
+                X[column] = pd.to_numeric(
+                    X[column],
+                    errors="coerce",
+                )
+
+        return X
+
+    # =========================================================================
+    # TARGET EXTRACTION
+    # =========================================================================
+
+    def _extract_target(self, df):
+        """
+        Extract the churn target.
+
+        Supports:
+            Churn
+            Exited
+            Churn Label
+        """
+
+        possible_targets = [
+            "Churn",
+            "Exited",
+            "Churn Label",
+        ]
+
+        target_column = next(
+            (
+                column
+                for column in possible_targets
+                if column in df.columns
+            ),
+            None,
+        )
+
+        if target_column is None:
+
+            raise ValueError(
+                "No target column found. "
+                f"Expected one of: {possible_targets}"
+            )
+
+        y = df[target_column].copy()
+
+        if y.dtype == object:
+
+            y = (
+                y.astype(str)
+                .str.strip()
+                .str.lower()
+                .map(
+                    {
+                        "yes": 1,
+                        "no": 0,
+                        "true": 1,
+                        "false": 0,
+                        "1": 1,
+                        "0": 0,
+                    }
+                )
+            )
+
+        y = pd.to_numeric(
+            y,
+            errors="coerce",
+        )
+
+        if y.isna().any():
+
+            raise ValueError(
+                f"Unable to encode all target values "
+                f"for column '{target_column}'."
+            )
+
+        return y.astype(int).values
+
+    # =========================================================================
+    # CORRELATION FILTER
+    # =========================================================================
+
+    def _fit_corr_filter(
+        self,
+        X,
+        y=None,
+    ):
+        """
+        Learn highly correlated columns from the fitting population.
+        """
+
+        if (
+            self.correlation_threshold
+            is None
+        ):
+
+            self.correlation_columns_to_drop = []
+
+            return X
+
+        numeric_X = X.select_dtypes(
+            include=[np.number]
+        )
+
+        if numeric_X.shape[1] <= 1:
+
+            self.correlation_columns_to_drop = []
+
+            return X
+
+        corr_matrix = (
+            numeric_X.corr().abs()
+        )
+
+        upper = corr_matrix.where(
+            np.triu(
+                np.ones(
+                    corr_matrix.shape
+                ),
+                k=1,
+            ).astype(bool)
+        )
+
+        to_drop = [
+            column
+            for column in upper.columns
+            if any(
+                upper[column]
+                > self.correlation_threshold
+            )
+        ]
+
+        self.correlation_columns_to_drop = (
+            to_drop
+        )
+
+        return X.drop(
+            columns=to_drop,
+            errors="ignore",
+        )
+
+    def _apply_corr_filter(self, X):
+        """
+        Apply the correlation-filter decisions learned during fit().
+        """
+
+        if not self.correlation_columns_to_drop:
+
+            return X
+
+        return X.drop(
+            columns=(
+                self.correlation_columns_to_drop
+            ),
+            errors="ignore",
+        )
+
+    # =========================================================================
+    # COLD-START FIT
+    # =========================================================================
+
+    def fit(self, df):
+        """
+        Fit the ColdStartFeatureEngineer.
+
+        IMPORTANT:
+        This method is intentionally separate from fit_transform().
+
+        feature_engineering.py uses:
+
+            cs_engineer.fit(train_non_cold)
+
+        followed by:
+
+            cs_engineer.transform(train_cold)
+            cs_engineer.transform(val_cold)
+            cs_engineer.transform(test_cold)
+
+        Therefore this method learns ALL transformation parameters from
+        non-cold-start TRAINING data without producing an MPMN training
+        output from that non-cold population.
+        """
+
+        X = self._engineer_features(
+            df
+        )
+
+        # Fit all encoders/scalers.
+        X = self._apply_encoding(
+            X,
+            fit=True,
+        )
+
+        # Fit correlation filtering.
+        X = self._fit_corr_filter(
+            X
+        )
+
+        # Clean temporary numerical problems so the final feature
+        # structure is known.
+        X = X.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+
+        X = X.fillna(0)
+
+        # Store exact feature order.
+        self.feature_names_out = (
+            X.columns.tolist()
+        )
+
+        self.fitted = True
+
+        return self
+
+    # =========================================================================
+    # COLD-START FIT + TRANSFORM
+    # =========================================================================
+
+    def fit_transform(self, df):
+        """
+        Fit and transform the supplied data.
+
+        This method is retained for compatibility and convenience.
+
+        For the actual MPMN pipeline, feature_engineering.py should use
+        fit(non_cold_train) followed by transform(cold_data).
+        """
+
+        self.fit(df)
+
+        X, y, feature_names = (
+            self.transform(df)
+        )
+
+        return (
+            X,
+            y,
+            feature_names,
+        )
+
+    # =========================================================================
+    # COLD-START TRANSFORM
+    # =========================================================================
+
+    def transform(self, df):
+        """
+        Transform data using parameters learned by fit().
+        """
+
+        if not self.fitted:
+
+            raise RuntimeError(
+                "ColdStartFeatureEngineer must be fitted "
+                "before transform() is called."
+            )
+
+        X = self._engineer_features(
+            df
+        )
+
+        X = self._apply_encoding(
+            X,
+            fit=False,
+        )
+
+        X = self._apply_corr_filter(
+            X
+        )
+
+        # ---------------------------------------------------------------------
+        # Guarantee identical feature space and feature order.
+        # ---------------------------------------------------------------------
+
+        X = X.reindex(
+            columns=self.feature_names_out,
+            fill_value=0,
+        )
+
+        X = X.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+
+        X = X.fillna(0)
+
+        y = self._extract_target(
+            df
+        )
+
+        return (
+            X.values,
+            y,
+            self.feature_names_out,
+        )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. ESTABLISHED FEATURE ENGINEER  (GATEFuse Path)
-# ─────────────────────────────────────────────────────────────────────────────
-<<<<<<< HEAD
+# =============================================================================
+# ESTABLISHED / NON-COLD-START FEATURE ENGINEER
+# =============================================================================
 
-# ---------------------------------------------------------------------------
-# Dataset-specific configuration
-# ---------------------------------------------------------------------------
+class EstablishedFeatureEngineer:
+    """
+    Feature engineering for the GATEFuse non-cold-start path.
+
+    This class follows DATASET_CONFIG exactly.
+
+    The following are intentionally retained where configured:
+        - Bank Complain
+        - Bank Satisfaction Score
+        - Telco1 Satisfaction Score
+        - Telco1 Latitude
+        - Telco1 Longitude
+        - Telco1 Population
+        - Telco1 Total Revenue
+    """
+
+    def __init__(
+        self,
+        dataset_type,
+        scalers_dir,
+        corr_threshold=None,
+    ):
+
+        self.dataset_type = (
+            dataset_type.lower()
+        )
+
+        self.scalers_dir = (
+            scalers_dir
+        )
+
+        self.corr_threshold = (
+            corr_threshold
+        )
+
+        self.fitted = False
+
+        self._cfg = DATASET_CONFIG[
+            self.dataset_type
+        ]
+
+        self.std_scaler = (
+            StandardScaler()
+        )
+
+        self.ohe_columns = []
+
+        self.dropped_cols = []
+
+    # =========================================================================
+    # PATHS
+    # =========================================================================
+
+    @property
+    def scaler_path(self):
+
+        return os.path.join(
+            self.scalers_dir,
+            self._cfg[
+                "scalers_subdir"
+            ],
+            "std_scaler.pkl",
+        )
+
+    @property
+    def corr_drop_path(self):
+
+        return os.path.join(
+            self.scalers_dir,
+            self._cfg[
+                "scalers_subdir"
+            ],
+            "corr_dropped_cols.pkl",
+        )
+
+    # =========================================================================
+    # TARGET + X EXTRACTION
+    # =========================================================================
+
+    def _extract_Xy(self, df):
+        """
+        Extract X and y.
+
+        Removes:
+            - dataset ID columns
+            - configured drop columns
+            - target column
+
+        In particular, is_cold_start is removed because it appears in
+        drop_cols for all datasets.
+        """
+
+        cfg = self._cfg
+
+        label_col = cfg[
+            "label_col"
+        ]
+
+        if label_col not in df.columns:
+
+            raise ValueError(
+                f"Target column '{label_col}' "
+                f"not found for dataset "
+                f"'{self.dataset_type}'."
+            )
+
+        cols_to_drop = (
+            cfg.get("id_cols", [])
+            + cfg.get("drop_cols", [])
+            + [label_col]
+        )
+
+        # Remove duplicate column names while preserving order.
+        cols_to_drop = list(
+            dict.fromkeys(
+                cols_to_drop
+            )
+        )
+
+        cols_to_drop = [
+            column
+            for column in cols_to_drop
+            if column in df.columns
+        ]
+
+        # ---------------------------------------------------------------------
+        # Target encoding
+        # ---------------------------------------------------------------------
+
+        y = (
+            df[label_col]
+            .map(
+                {
+                    "Yes": 1,
+                    "No": 0,
+                    1: 1,
+                    0: 0,
+                    "1": 1,
+                    "0": 0,
+                }
+            )
+        )
+
+        # Handle lowercase/string variants if necessary.
+        if y.isna().any():
+
+            y = (
+                df[label_col]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .map(
+                    {
+                        "yes": 1,
+                        "no": 0,
+                        "true": 1,
+                        "false": 0,
+                        "1": 1,
+                        "0": 0,
+                    }
+                )
+            )
+
+        if y.isna().any():
+
+            raise ValueError(
+                f"Could not encode all target values "
+                f"for dataset '{self.dataset_type}'."
+            )
+
+        y = y.astype(int).values
+
+        # ---------------------------------------------------------------------
+        # Feature matrix
+        # ---------------------------------------------------------------------
+
+        X = df.drop(
+            columns=cols_to_drop
+        ).copy()
+
+        return X, y
+
+    # =========================================================================
+    # ENCODING
+    # =========================================================================
+
+    def _encode(
+        self,
+        X,
+        fit=False,
+    ):
+        """
+        Apply the dataset-specific encoding pipeline.
+        """
+
+        cfg = self._cfg
+
+        X = X.copy()
+
+        # ---------------------------------------------------------------------
+        # Fill missing values
+        # ---------------------------------------------------------------------
+
+        for column, fill_value in (
+            cfg.get(
+                "fillna",
+                {}
+            ).items()
+        ):
+
+            if column in X.columns:
+
+                X[column] = (
+                    X[column]
+                    .fillna(fill_value)
+                )
+
+        # ---------------------------------------------------------------------
+        # Bank ordinal columns
+        # ---------------------------------------------------------------------
+
+        for column, mapping in (
+            cfg.get(
+                "ordinal_cols",
+                {}
+            ).items()
+        ):
+
+            if column not in X.columns:
+                continue
+
+            values = (
+                X[column]
+                .astype(str)
+                .str.upper()
+            )
+
+            X[column] = values.map(
+                mapping
+            )
+
+        # ---------------------------------------------------------------------
+        # Binary columns
+        # ---------------------------------------------------------------------
+
+        binary_cols = cfg.get(
+            "binary_cols",
+            {}
+        )
+
+        # Bank uses a dictionary:
+        #
+        # {
+        #     "Gender": {...},
+        #     "HasCrCard": {...},
+        #     ...
+        # }
+        if isinstance(
+            binary_cols,
+            dict
+        ):
+
+            for column, mapping in (
+                binary_cols.items()
+            ):
+
+                if column not in X.columns:
+                    continue
+
+                X[column] = X[
+                    column
+                ].map(mapping)
+
+        # Telco datasets use a list and a shared binary_map.
+        elif isinstance(
+            binary_cols,
+            list
+        ):
+
+            binary_map = cfg.get(
+                "binary_map",
+                {
+                    "Yes": 1,
+                    "No": 0,
+                    "Male": 0,
+                    "Female": 1,
+                },
+            )
+
+            for column in binary_cols:
+
+                if column not in X.columns:
+                    continue
+
+                X[column] = X[
+                    column
+                ].map(binary_map)
+
+        # ---------------------------------------------------------------------
+        # Integer columns
+        # ---------------------------------------------------------------------
+
+        for column in cfg.get(
+            "int_cols",
+            []
+        ):
+
+            if column not in X.columns:
+                continue
+
+            X[column] = pd.to_numeric(
+                X[column],
+                errors="coerce",
+            )
+
+        # ---------------------------------------------------------------------
+        # One-hot encoding
+        # ---------------------------------------------------------------------
+
+        categorical_cols = [
+            column
+            for column in cfg.get(
+                "categorical_cols",
+                []
+            )
+            if column in X.columns
+        ]
+
+        if fit:
+
+            if categorical_cols:
+
+                X = pd.get_dummies(
+                    X,
+                    columns=categorical_cols,
+                    drop_first=False,
+                )
+
+            self.ohe_columns = (
+                X.columns.tolist()
+            )
+
+        else:
+
+            if categorical_cols:
+
+                X = pd.get_dummies(
+                    X,
+                    columns=categorical_cols,
+                    drop_first=False,
+                )
+
+            # Guarantee the exact same columns as training.
+            X = X.reindex(
+                columns=self.ohe_columns,
+                fill_value=0,
+            )
+
+        # ---------------------------------------------------------------------
+        # Convert dummy columns to integers
+        # ---------------------------------------------------------------------
+
+        dummy_regex = cfg.get(
+            "dummy_regex"
+        )
+
+        if dummy_regex:
+
+            dummy_columns = X.filter(
+                regex=dummy_regex
+            ).columns
+
+            for column in dummy_columns:
+
+                X[column] = (
+                    X[column]
+                    .astype(int)
+                )
+
+        return X
+
+    # =========================================================================
+    # STANDARD SCALING
+    # =========================================================================
+
+    def _scale(
+        self,
+        X,
+        fit=False,
+    ):
+        """
+        Standard-scale the configured numerical columns.
+        """
+
+        cfg = self._cfg
+
+        numerical_cols = [
+            column
+            for column in cfg.get(
+                "std_numerical_cols",
+                []
+            )
+            if column in X.columns
+        ]
+
+        if not numerical_cols:
+
+            return X
+
+        X[numerical_cols] = (
+            X[numerical_cols]
+            .apply(
+                pd.to_numeric,
+                errors="coerce",
+            )
+        )
+
+        if fit:
+
+            self.std_scaler.fit(
+                X[numerical_cols]
+            )
+
+        else:
+
+            if not self.fitted:
+
+                raise RuntimeError(
+                    "EstablishedFeatureEngineer "
+                    "must be fitted before scaling."
+                )
+
+        X[numerical_cols] = (
+            self.std_scaler.transform(
+                X[numerical_cols]
+            )
+        )
+
+        return X
+
+    # =========================================================================
+    # SAVE / LOAD SCALER
+    # =========================================================================
+
+    def _save_scaler(self):
+
+        scaler_dir = os.path.dirname(
+            self.scaler_path
+        )
+
+        os.makedirs(
+            scaler_dir,
+            exist_ok=True,
+        )
+
+        joblib.dump(
+            self.std_scaler,
+            self.scaler_path,
+        )
+
+    def _load_scaler(self):
+
+        if not os.path.exists(
+            self.scaler_path
+        ):
+
+            raise FileNotFoundError(
+                f"Scaler file not found: "
+                f"{self.scaler_path}"
+            )
+
+        self.std_scaler = (
+            joblib.load(
+                self.scaler_path
+            )
+        )
+
+    # =========================================================================
+    # CORRELATION FILTER
+    # =========================================================================
+
+    def _apply_corr_filter(
+        self,
+        X,
+        y=None,
+        fit=False,
+    ):
+        """
+        Learn/apply correlation-based feature filtering.
+
+        If corr_threshold is None, this stage does nothing.
+        """
+
+        if self.corr_threshold is None:
+
+            return X
+
+        if fit:
+
+            numeric_X = (
+                X.select_dtypes(
+                    include=[np.number]
+                )
+            )
+
+            if numeric_X.shape[1] <= 1:
+
+                self.dropped_cols = []
+
+            else:
+
+                corr_matrix = (
+                    numeric_X
+                    .corr()
+                    .abs()
+                )
+
+                upper = (
+                    corr_matrix.where(
+                        np.triu(
+                            np.ones(
+                                corr_matrix.shape
+                            ),
+                            k=1,
+                        ).astype(bool)
+                    )
+                )
+
+                self.dropped_cols = [
+                    column
+                    for column in upper.columns
+                    if any(
+                        upper[column]
+                        > self.corr_threshold
+                    )
+                ]
+
+            os.makedirs(
+                os.path.dirname(
+                    self.corr_drop_path
+                ),
+                exist_ok=True,
+            )
+
+            joblib.dump(
+                self.dropped_cols,
+                self.corr_drop_path,
+            )
+
+        else:
+
+            if not self.dropped_cols:
+
+                if os.path.exists(
+                    self.corr_drop_path
+                ):
+
+                    self.dropped_cols = (
+                        joblib.load(
+                            self.corr_drop_path
+                        )
+                    )
+
+        return X.drop(
+            columns=self.dropped_cols,
+            errors="ignore",
+        )
+
+    # =========================================================================
+    # FIT + TRANSFORM
+    # =========================================================================
+
+    def fit_transform(self, df):
+        """
+        Fit the established/non-cold-start feature engineer and transform
+        the training data.
+        """
+
+        X, y = self._extract_Xy(
+            df
+        )
+
+        # Encode
+        X = self._encode(
+            X,
+            fit=True,
+        )
+
+        # Scale
+        X = self._scale(
+            X,
+            fit=True,
+        )
+
+        # Correlation filtering
+        X = self._apply_corr_filter(
+            X,
+            y=y,
+            fit=True,
+        )
+
+        # Numerical cleanup
+        X = X.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+
+        X = X.fillna(0)
+
+        # Persist scaler
+        self._save_scaler()
+
+        # Store final feature columns.
+        self.ohe_columns = (
+            X.columns.tolist()
+        )
+
+        self.fitted = True
+
+        feature_names = (
+            X.columns.tolist()
+        )
+
+        return (
+            X.values,
+            y,
+            feature_names,
+        )
+
+    # =========================================================================
+    # TRANSFORM
+    # =========================================================================
+
+    def transform(self, df):
+        """
+        Transform validation/test data using the parameters learned from
+        non-cold-start training data.
+        """
+
+        if not self.fitted:
+
+            raise RuntimeError(
+                "EstablishedFeatureEngineer "
+                "must be fitted before transform()."
+            )
+
+        X, y = self._extract_Xy(
+            df
+        )
+
+        # Encode using learned categorical structure.
+        X = self._encode(
+            X,
+            fit=False,
+        )
+
+        # Scale using learned scaler.
+        X = self._scale(
+            X,
+            fit=False,
+        )
+
+        # Apply learned correlation filter.
+        X = self._apply_corr_filter(
+            X,
+            y=None,
+            fit=False,
+        )
+
+        # Numerical cleanup.
+        X = X.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+
+        X = X.fillna(0)
+
+        feature_names = (
+            X.columns.tolist()
+        )
+
+        return (
+            X.values,
+            y,
+            feature_names,
+        )
+
+
+# =============================================================================
+# ESTABLISHED / NON-COLD-START DATASET CONFIGURATION
+# =============================================================================
 
 DATASET_CONFIG = {
+
+    # =========================================================================
+    # BANK
+    # =========================================================================
+
     "bank": {
+
         "label_col": "Churn",
-        "id_cols": ["RowNumber", "CustomerId", "Surname"],
-        "drop_cols": ["Satisfaction Score", "is_cold_start"],
+
+        "id_cols": [
+            "RowNumber",
+            "CustomerId",
+            "Surname",
+        ],
+
+        "drop_cols": [
+            "is_cold_start",
+        ],
+
         "ordinal_cols": {
-            "Card Type": {"SILVER": 1, "GOLD": 2, "PLATINUM": 3, "DIAMOND": 4}
+
+            "Card Type": {
+                "SILVER": 1,
+                "GOLD": 2,
+                "PLATINUM": 3,
+                "DIAMOND": 4,
+            },
+
         },
-        "binary_cols": {"Gender": {"Male": 0, "Female": 1}},
+
+        "binary_cols": {
+
+            "Gender": {
+                "Male": 0,
+                "Female": 1,
+            },
+
+            "HasCrCard": {
+                1: 1,
+                0: 0,
+                "1": 1,
+                "0": 0,
+            },
+
+            "IsActiveMember": {
+                1: 1,
+                0: 0,
+                "1": 1,
+                "0": 0,
+            },
+
+            # -------------------------------------------------------------
+            # KEEP COMPLAIN
+            # -------------------------------------------------------------
+
+            "Complain": {
+                1: 1,
+                0: 0,
+                "1": 1,
+                "0": 0,
+            },
+
+        },
+
+        "int_cols": [
+            "NumOfProducts",
+        ],
+
         "fillna": {},
-        "categorical_cols": ["Geography"],
+
+        "categorical_cols": [
+            "Geography",
+        ],
+
         "dummy_regex": "^Geography_",
+
+        # -------------------------------------------------------------
+        # KEEP SATISFACTION SCORE AND COMPLAIN
+        # -------------------------------------------------------------
+
         "std_numerical_cols": [
             "CreditScore",
             "Age",
@@ -461,36 +1796,54 @@ DATASET_CONFIG = {
             "Balance",
             "EstimatedSalary",
             "Point Earned",
+            "Satisfaction Score",
+            "Complain",
         ],
+
         "scalers_subdir": "bank_scalers",
     },
+
+
+    # =========================================================================
+    # TELCO 1
+    # =========================================================================
+
     "telco1": {
+
         "label_col": "Churn",
+
         "id_cols": [
             "Customer ID",
-            "Under 30",
-            "Senior Citizen",
-            "Country",
-            "State",
-            "City",
-            "Zip Code",
-            "Latitude",
-            "Longitude",
-            "Population",
-            "Quarter",
-            "Total Revenue",
             "Customer Status",
             "Churn Score",
             "CLTV",
             "Churn Category",
             "Churn Reason",
+            "Quarter",
+            "City",
+            "Zip Code",
+            "Country",
+            "State",
         ],
-        "drop_cols": ["Satisfaction Score", "is_cold_start"],
+
+        "drop_cols": [
+            "is_cold_start",
+        ],
+
         "ordinal_cols": {},
-        "binary_map": {"Yes": 1, "No": 0, "Male": 0, "Female": 1},
+
+        "binary_map": {
+            "Yes": 1,
+            "No": 0,
+            "Male": 0,
+            "Female": 1,
+        },
+
         "binary_cols": [
             "Gender",
             "Married",
+            "Under 30",
+            "Senior Citizen",
             "Dependents",
             "Referred a Friend",
             "Phone Service",
@@ -506,9 +1859,23 @@ DATASET_CONFIG = {
             "Unlimited Data",
             "Paperless Billing",
         ],
-        "fillna": {"Internet Type": "No Internet", "Offer": "No Offer"},
-        "categorical_cols": ["Offer", "Internet Type", "Contract", "Payment Method"],
-        "dummy_regex": "^(Offer_|Internet Type_|Contract_|Payment Method_)",
+
+        "fillna": {
+            "Internet Type": "No Internet",
+            "Offer": "No Offer",
+        },
+
+        "categorical_cols": [
+            "Offer",
+            "Internet Type",
+            "Contract",
+            "Payment Method",
+        ],
+
+        "dummy_regex": (
+            "^(Offer_|Internet Type_|Contract_|Payment Method_)"
+        ),
+
         "std_numerical_cols": [
             "Age",
             "Number of Dependents",
@@ -521,15 +1888,42 @@ DATASET_CONFIG = {
             "Total Refunds",
             "Total Extra Data Charges",
             "Total Long Distance Charges",
+            "Total Revenue",
+            "Satisfaction Score",
+            "Latitude",
+            "Longitude",
+            "Population",
         ],
+
         "scalers_subdir": "telco1_scalers",
     },
+
+
+    # =========================================================================
+    # TELCO 2
+    # =========================================================================
+
     "telco2": {
+
         "label_col": "Churn",
-        "id_cols": ["customerID"],
-        "drop_cols": ["is_cold_start"],
+
+        "id_cols": [
+            "customerID",
+        ],
+
+        "drop_cols": [
+            "is_cold_start",
+        ],
+
         "ordinal_cols": {},
-        "binary_map": {"Yes": 1, "No": 0, "Male": 0, "Female": 1},
+
+        "binary_map": {
+            "Yes": 1,
+            "No": 0,
+            "Male": 0,
+            "Female": 1,
+        },
+
         "binary_cols": [
             "gender",
             "Partner",
@@ -537,7 +1931,9 @@ DATASET_CONFIG = {
             "PaperlessBilling",
             "PhoneService",
         ],
+
         "fillna": {},
+
         "categorical_cols": [
             "SeniorCitizen",
             "InternetService",
@@ -551,1420 +1947,19 @@ DATASET_CONFIG = {
             "StreamingTV",
             "StreamingMovies",
         ],
+
         "dummy_regex": (
             "^(SeniorCitizen_|MultipleLines_|InternetService_|Contract_"
             "|PaymentMethod_|OnlineSecurity_|TechSupport_|OnlineBackup_"
             "|DeviceProtection_|StreamingTV_|StreamingMovies_)"
         ),
-        "std_numerical_cols": ["tenure", "MonthlyCharges", "TotalCharges"],
+
+        "std_numerical_cols": [
+            "tenure",
+            "MonthlyCharges",
+            "TotalCharges",
+        ],
+
         "scalers_subdir": "telco2_scalers",
     },
 }
-=======
-#
-# Aligned with feature_engineering_non_cold.ipynb (the notebook that produced
-# the strong baseline) and with the user's group structure that worked well.
-#
-# Encoding rules:
-#   • Card Type    → ordinal (Silver=1, Gold=2, Platinum=3, Diamond=4),
-#                    single column, NOT one-hot encoded.
-#   • Service cols → single binary column (Yes=1, No=0, "No internet service"=0,
-#                    "No phone service"=0). Eligibility is already captured by
-#                    Internet Service / Phone Service columns.
-#   • Nominal OHE  → drop_first=True for telco1/telco2 (cleaner, no dummy trap).
-#                    Bank Geography keeps drop_first=False (matches downstream
-#                    model groups expecting all three dummies).
-#   • Continuous   → StandardScaler. No log1p.
-#   • Bounded      → MinMaxScaler (Satisfaction Score only).
-#   • Tenure       → StandardScaler for all three datasets.
-#   • No has_zero_balance feature.
-#
-# Group structure follows the user's previous setup, with these refinements:
-#   • CreditScore and EstimatedSalary live in Billing for bank (financial
-#     standing belongs with billing context — Profile stays demographic).
-#   • Point Earned in Usage (engagement signal).
-#   • Complain in Usage for bank (real raw column).NOT ANYMORE
-#   • Number of Dependents (count) used for telco1; the redundant binary
-#     Dependents column is dropped.
-#   • Telco2 service columns are binary, not OHE — drastically reduces
-#     redundancy in the Usage group and balances group sizes.
->>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
-
-
-# ---------------------------------------------------------------------------
-# Feature group configs (for GATE / attention model)
-# ---------------------------------------------------------------------------
-
-FEATURE_GROUPS = {
-    "bank": {
-        "Profile": [
-            "CreditScore",
-            "Age",
-            "Geography_France",
-            "Geography_Germany",
-            "Geography_Spain",
-            "Gender",
-            "EstimatedSalary",
-        ],
-        "Contract": [
-            "Tenure",
-            "Card Type",
-        ],
-        "Billing": [
-            "Balance",
-            "Point Earned",
-        ],
-        "Usage": [
-            "NumOfProducts",
-            "HasCrCard",
-            "IsActiveMember",
-        ],
-    },
-    "telco1": {
-        "Profile": [
-            "Gender",
-            "Age",
-            "Married",
-            "Number of Dependents",
-        ],
-        "Contract": [
-            "Tenure in Months",
-            "Offer_No Offer",
-            "Offer_Offer A",
-            "Offer_Offer B",
-            "Offer_Offer C",
-            "Offer_Offer D",
-            "Offer_Offer E",
-            "Contract_Month-to-Month",
-            "Contract_One Year",
-            "Contract_Two Year",
-        ],
-        "Billing": [
-            "Monthly Charge",
-            "Total Charges",
-            "Total Refunds",
-            "Total Extra Data Charges",
-            "Total Long Distance Charges",
-            "Paperless Billing",
-            "Payment Method_Bank transfer (automatic)",
-            "Payment Method_Credit card (automatic)",
-            "Payment Method_Electronic check",
-            "Payment Method_Mailed check",
-        ],
-        "Usage": [
-            "Phone Service",
-            "Multiple Lines",
-            "Internet Service",
-            "Internet Type_Cable",
-            "Internet Type_DSL",
-            "Internet Type_Fiber Optic",
-            "Internet Type_No Internet Service",
-            "Avg Monthly GB Download",
-            "Online Security",
-            "Online Backup",
-            "Device Protection Plan",
-            "Premium Tech Support",
-            "Streaming TV",
-            "Streaming Movies",
-            "Streaming Music",
-            "Unlimited Data",
-            "Referred a Friend",
-            "Dependents",
-            "Number of Referrals",
-            "Avg Monthly Long Distance Charges",
-        ],
-    },
-    "telco2": {
-        "Profile": [
-            "gender",
-            "SeniorCitizen_0",
-            "SeniorCitizen_1",
-            "Partner",
-            "Dependents",
-        ],
-        "Contract": [
-            "tenure",
-            "Contract_Month-to-month",
-            "Contract_One year",
-            "Contract_Two year",
-            "InternetService_DSL",
-            "InternetService_Fiber optic",
-            "InternetService_No",
-        ],
-        "Billing": [
-            "MonthlyCharges",
-            "TotalCharges",
-            "PaperlessBilling",
-            "PaymentMethod_Bank transfer (automatic)",
-            "PaymentMethod_Credit card (automatic)",
-            "PaymentMethod_Electronic check",
-            "PaymentMethod_Mailed check",
-        ],
-        "Usage": [
-            "PhoneService",
-            "MultipleLines_No",
-            "MultipleLines_No phone service",
-            "MultipleLines_Yes",
-            "OnlineSecurity_No",
-            "OnlineSecurity_No internet service",
-            "OnlineSecurity_Yes",
-            "OnlineBackup_No",
-            "OnlineBackup_No internet service",
-            "OnlineBackup_Yes",
-            "DeviceProtection_No",
-            "DeviceProtection_No internet service",
-            "DeviceProtection_Yes",
-            "TechSupport_No",
-            "TechSupport_No internet service",
-            "TechSupport_Yes",
-            "StreamingTV_No",
-            "StreamingTV_No internet service",
-            "StreamingTV_Yes",
-            "StreamingMovies_No",
-            "StreamingMovies_No internet service",
-            "StreamingMovies_Yes",
-        ],
-    },
-}
-
-
-class EstablishedFeatureEngineer:
-    """
-    Feature engineering for established (non-cold-start) users.
-
-    Parameters
-    ----------
-    dataset_type : str
-        One of "bank", "telco1", "telco2".
-    scalers_dir : str
-        Root directory under which scaler .pkl files are saved/loaded.
-        Artefacts land in  <scalers_dir>/<dataset>_scalers/.
-    """
-
-    def __init__(self, dataset_type: str, scalers_dir: str):
-        self.dataset_type = dataset_type.lower()
-        self.scalers_dir = scalers_dir
-        self.fitted = False
-
-        self._cfg = DATASET_CONFIG[self.dataset_type]
-        self._groups_cfg = FEATURE_GROUPS[self.dataset_type]
-
-        self.std_scaler = StandardScaler()
-        self.ohe_columns: list = []  # column list after get_dummies, saved on fit
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-<<<<<<< HEAD
-    def _scalers_subdir(self) -> str:
-        return os.path.join(self.scalers_dir, self._cfg["scalers_subdir"])
-=======
-        self.bank_config = {
-            "binary":  ["Gender"],
-            "ordinal": ["Card Type"],
-            "ohe":     ["Geography"],
-            "ohe_drop_first": {"Geography": False},   # match downstream model groups
-            "standard": [
-                "CreditScore", "Age", "Tenure", "Balance",
-                "EstimatedSalary", "Point Earned",
-            ],
-            "minmax": ["Satisfaction Score"],
-            "passthrough_numeric": [
-                "NumOfProducts", "HasCrCard", "IsActiveMember", 
-                # "Complain",
-            ],
-            "group_layout": {
-                "Profile": [
-                    "Geography_Germany", "Geography_Spain", "Geography_France",
-                    "Gender", "Age", "Satisfaction Score",
-                ],
-                "Contract": ["Tenure", "Card Type"],
-                "Billing":  ["Balance", "EstimatedSalary", "CreditScore"],
-                "Usage": [
-                    "NumOfProducts", "HasCrCard", "IsActiveMember",
-                    # "Complain",
-                      "Point Earned",
-                ],
-            },
-        }
->>>>>>> d66af3786a85f4f752e0806f0347a5c4e2599045
-
-    def _save(self, obj, filename: str):
-        path = os.path.join(self._scalers_subdir(), filename)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        joblib.dump(obj, path)
-
-    def _load(self, filename: str):
-        return joblib.load(os.path.join(self._scalers_subdir(), filename))
-
-    def _extract_Xy(self, df: pd.DataFrame):
-        """Separate features from label and id/dropped columns."""
-        cfg = self._cfg
-        label_col = cfg["label_col"]
-        cols_to_drop = cfg["id_cols"] + cfg.get("drop_cols", []) + [label_col]
-        cols_to_drop = [c for c in cols_to_drop if c in df.columns]
-
-        y = df[label_col].map({"Yes": 1, "No": 0, 1: 1, 0: 0}).values
-        X = df.drop(columns=cols_to_drop).copy()
-        return X, y
-
-    def _encode(self, X: pd.DataFrame, fit: bool) -> pd.DataFrame:
-        """Apply all encoding steps in order."""
-        cfg = self._cfg
-
-        # 1. fillna
-        for col, val in cfg.get("fillna", {}).items():
-            if col in X.columns:
-                X[col] = X[col].fillna(val)
-
-        # 2. ordinal encoding (bank: Card Type)
-        for col, mapping in cfg.get("ordinal_cols", {}).items():
-            if col in X.columns:
-                X[col] = X[col].map(mapping)
-                if fit:
-                    self._save(mapping, f"{col.replace(' ', '')}_mapping.pkl")
-
-        # 3. binary encoding
-        if self.dataset_type == "bank":
-            # per-column maps
-            for col, mapping in cfg["binary_cols"].items():
-                if col in X.columns:
-                    X[col] = X[col].map(mapping)
-                    if fit:
-                        self._save(mapping, f"{col.replace(' ', '')}_mapping.pkl")
-        else:
-            binary_map = cfg["binary_map"]
-            for col in cfg["binary_cols"]:
-                if col in X.columns:
-                    X[col] = X[col].map(binary_map)
-            if fit:
-                self._save(binary_map, "binary_map.pkl")
-
-        # 4. one-hot encoding
-        categorical_cols = [c for c in cfg["categorical_cols"] if c in X.columns]
-        X = pd.get_dummies(X, columns=categorical_cols, drop_first=False)
-
-        dummy_cols = X.filter(regex=cfg["dummy_regex"]).columns
-        X[dummy_cols] = X[dummy_cols].astype(int)
-
-        if fit:
-            self.ohe_columns = X.columns.tolist()
-            self._save(self.ohe_columns, "ohe_columns.pkl")
-        else:
-            # Align to training columns
-            ohe_columns = self._load("ohe_columns.pkl")
-            for col in ohe_columns:
-                if col not in X.columns:
-                    X[col] = 0
-            X = X[ohe_columns]
-
-        return X
-
-    def _scale(self, X: pd.DataFrame, fit: bool) -> pd.DataFrame:
-        """Apply StandardScaler to numerical columns."""
-        std_cols = [c for c in self._cfg["std_numerical_cols"] if c in X.columns]
-
-        if fit:
-            X[std_cols] = self.std_scaler.fit_transform(X[std_cols])
-            self._save(self.std_scaler, "std_scaler.pkl")
-        else:
-            std_scaler = self._load("std_scaler.pkl")
-            X[std_cols] = std_scaler.transform(X[std_cols])
-
-        return X
-
-    def _build_feature_groups(self, col_names: list) -> dict:
-        """Map group names to the indices of their features in col_names."""
-        feature_groups = {}
-        for group_name, group_cols in self._groups_cfg.items():
-            indices = [col_names.index(c) for c in group_cols if c in col_names]
-            feature_groups[group_name] = indices
-        return feature_groups
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def fit_transform(self, df: pd.DataFrame) -> tuple:
-        """
-        Fit on and transform the training DataFrame.
-
-        Returns
-        -------
-        X : np.ndarray,  shape (n_samples, n_features)
-        y : np.ndarray,  shape (n_samples,)
-        feature_names : list[str]
-        feature_groups : dict[str, list[int]]
-        """
-        X, y = self._extract_Xy(df)
-        X = self._encode(X, fit=True)
-        X = self._scale(X, fit=True)
-
-        feature_names = X.columns.tolist()
-        feature_groups = self._build_feature_groups(feature_names)
-
-        self.fitted = True
-        print(f"[{self.dataset_type}] fit_transform complete.")
-        print(f"   Shape: {X.shape}")
-        print(f"   Groups: { {k: len(v) for k, v in feature_groups.items()} }")
-
-        return X.values, y, feature_names, feature_groups
-
-    def transform(self, df: pd.DataFrame) -> tuple:
-        """
-        Transform val/test data using fitted artefacts (no fitting).
-
-        Returns
-        -------
-        X : np.ndarray,  shape (n_samples, n_features)
-        y : np.ndarray,  shape (n_samples,)
-        feature_names : list[str]
-        feature_groups : dict[str, list[int]]
-        """
-        if not self.fitted:
-            raise ValueError(
-                "Call fit_transform() before transform(), "
-                "or load a fitted instance from disk."
-            )
-        X, y = self._extract_Xy(df)
-        X = self._encode(X, fit=False)
-        X = self._scale(X, fit=False)
-
-        feature_names = X.columns.tolist()
-        feature_groups = self._build_feature_groups(feature_names)
-
-        return X.values, y, feature_names, feature_groups
-
-
-# class EstablishedFeatureEngineer:
-#     """
-#     Feature engineering for established (non-cold-start) users.
-
-#     Parameters
-#     ----------
-#     dataset_type : str
-#         One of "bank", "telco1", "telco2".
-#     scalers_dir : str
-#         Root directory under which scaler .pkl files are saved/loaded.
-#         Artefacts land in  <scalers_dir>/<dataset>_scalers/.
-#     """
-
-#     def __init__(self, dataset_type: str, scalers_dir: str):
-#         self.dataset_type = dataset_type.lower()
-#         self.scalers_dir = scalers_dir
-#         self.fitted = False
-
-#         self._cfg = DATASET_CONFIG[self.dataset_type]
-#         self._groups_cfg = FEATURE_GROUPS[self.dataset_type]
-
-#         self.std_scaler = StandardScaler()
-#         self.ohe_columns: list = []
-
-#     # ------------------------------------------------------------------
-#     # Internal helpers
-#     # ------------------------------------------------------------------
-
-#     def _scalers_subdir(self) -> str:
-#         return os.path.join(self.scalers_dir, self._cfg["scalers_subdir"])
-
-#     def _save(self, obj, filename: str):
-#         path = os.path.join(self._scalers_subdir(), filename)
-#         os.makedirs(os.path.dirname(path), exist_ok=True)
-#         joblib.dump(obj, path)
-
-#     def _load(self, filename: str):
-#         return joblib.load(os.path.join(self._scalers_subdir(), filename))
-
-#     def _extract_Xy(self, df: pd.DataFrame):
-#         """Separate features from label and id/dropped columns."""
-#         cfg = self._cfg
-#         label_col = cfg["label_col"]
-#         cols_to_drop = cfg["id_cols"] + cfg.get("drop_cols", []) + [label_col]
-#         cols_to_drop = [c for c in cols_to_drop if c in df.columns]
-
-#         y = df[label_col].map({"Yes": 1, "No": 0, 1: 1, 0: 0}).values
-#         X = df.drop(columns=cols_to_drop).copy()
-#         return X, y
-
-#     def _encode(self, X: pd.DataFrame, fit: bool) -> pd.DataFrame:
-#         """Apply all encoding steps in order."""
-#         cfg = self._cfg
-
-#         # 1. fillna
-#         for col, val in cfg.get("fillna", {}).items():
-#             if col in X.columns:
-#                 X[col] = X[col].fillna(val)
-
-#         # 2. ordinal encoding (bank: Card Type)
-#         for col, mapping in cfg.get("ordinal_cols", {}).items():
-#             if col in X.columns:
-#                 X[col] = X[col].map(mapping)
-#                 if fit:
-#                     self._save(mapping, f"{col.replace(' ', '')}_mapping.pkl")
-
-#         # 3. binary encoding
-#         if self.dataset_type == "bank":
-#             for col, mapping in cfg["binary_cols"].items():
-#                 if col in X.columns:
-#                     X[col] = X[col].map(mapping)
-#                     if fit:
-#                         self._save(mapping, f"{col.replace(' ', '')}_mapping.pkl")
-#         else:
-#             binary_map = cfg["binary_map"]
-#             for col in cfg["binary_cols"]:
-#                 if col in X.columns:
-#                     X[col] = X[col].map(binary_map)
-#             if fit:
-#                 self._save(binary_map, "binary_map.pkl")
-
-#         # 4. one-hot encoding
-#         categorical_cols = [c for c in cfg["categorical_cols"] if c in X.columns]
-#         X = pd.get_dummies(X, columns=categorical_cols, drop_first=False)
-
-#         dummy_cols = X.filter(regex=cfg["dummy_regex"]).columns
-#         X[dummy_cols] = X[dummy_cols].astype(int)
-
-#         if fit:
-#             self.ohe_columns = X.columns.tolist()
-#             self._save(self.ohe_columns, "ohe_columns.pkl")
-#         else:
-#             ohe_columns = self._load("ohe_columns.pkl")
-#             for col in ohe_columns:
-#                 if col not in X.columns:
-#                     X[col] = 0
-#             X = X[ohe_columns]
-
-#         return X
-
-#     def _scale(self, X: pd.DataFrame, fit: bool) -> pd.DataFrame:
-#         """Apply StandardScaler to numerical columns."""
-#         std_cols = [c for c in self._cfg["std_numerical_cols"] if c in X.columns]
-
-#         if fit:
-#             X[std_cols] = self.std_scaler.fit_transform(X[std_cols])
-#             self._save(self.std_scaler, "std_scaler.pkl")
-#         else:
-#             std_scaler = self._load("std_scaler.pkl")
-#             X[std_cols] = std_scaler.transform(X[std_cols])
-
-#         return X
-
-#     def _build_feature_groups(self, col_names: list) -> dict:
-#         """Map group names to the indices of their features in col_names."""
-#         feature_groups = {}
-#         for group_name, group_cols in self._groups_cfg.items():
-#             indices = [col_names.index(c) for c in group_cols if c in col_names]
-#             feature_groups[group_name] = indices
-#         return feature_groups
-
-#     # ------------------------------------------------------------------
-#     # Public API
-#     # ------------------------------------------------------------------
-
-#     def fit_transform(self, df: pd.DataFrame) -> tuple:
-#         """
-#         Fit on and transform the training DataFrame.
-
-#         Returns
-#         -------
-#         X : np.ndarray,  shape (n_samples, n_features)
-#         y : np.ndarray,  shape (n_samples,)
-#         feature_names : list[str]
-#         feature_groups : dict[str, list[int]]
-#         """
-#         X, y = self._extract_Xy(df)
-#         X = self._encode(X, fit=True)
-#         X = self._scale(X, fit=True)
-
-#         feature_names = X.columns.tolist()
-#         feature_groups = self._build_feature_groups(feature_names)
-
-#         self.fitted = True
-#         print(f"[{self.dataset_type}] fit_transform complete.")
-#         print(f"   Shape: {X.shape}")
-#         print(f"   Groups: { {k: len(v) for k, v in feature_groups.items()} }")
-
-#         return X.values, y, feature_names, feature_groups
-
-#     def transform(self, df: pd.DataFrame) -> tuple:
-#         """
-#         Transform val/test data using fitted artefacts (no fitting).
-
-#         Returns
-#         -------
-#         X : np.ndarray,  shape (n_samples, n_features)
-#         y : np.ndarray,  shape (n_samples,)
-#         feature_names : list[str]
-#         feature_groups : dict[str, list[int]]
-#         """
-#         if not self.fitted:
-#             raise ValueError(
-#                 "Call fit_transform() before transform(), "
-#                 "or load a fitted instance from disk."
-#             )
-#         X, y = self._extract_Xy(df)
-#         X = self._encode(X, fit=False)
-#         X = self._scale(X, fit=False)
-
-#         feature_names = X.columns.tolist()
-#         feature_groups = self._build_feature_groups(feature_names)
-
-#         return X.values, y, feature_names, feature_groups
-
-
-# # ─────────────────────────────────────────────────────────────────────────────
-# # UTILITIES
-# # ─────────────────────────────────────────────────────────────────────────────
-
-
-def _log_transform_warnings(df: pd.DataFrame, col_names: list) -> None:
-    """
-    Logs which categorical columns triggered the OHE unknown-category fallback
-    during transform. Helps detect distribution shift between non-cold fit data
-    and cold-start transform data.
-    """
-    pass
-
-
-# # import pandas as pd
-# # import numpy as np
-# # from sklearn.preprocessing import StandardScaler, MinMaxScaler
-# # import warnings
-
-# # warnings.filterwarnings("ignore")
-
-
-# # # ─────────────────────────────────────────────────────────────────────────────
-# # # SHARED UTILITIES
-# # # ─────────────────────────────────────────────────────────────────────────────
-
-
-# def _safe_log1p(series: pd.Series) -> pd.Series:
-#     """log1p transform, safe against negatives (clips to 0 first)."""
-#     return np.log1p(series.clip(lower=0))
-
-
-# def _encode_binary(series: pd.Series) -> pd.Series:
-#     """
-#     Maps Yes/No, Male/Female, True/False strings and existing 0/1 ints
-#     to clean 0/1 integers. Unknown values become NaN (caught downstream).
-#     """
-#     mapping = {
-#         "yes": 1,
-#         "no": 0,
-#         "true": 1,
-#         "false": 0,
-#         "male": 1,
-#         "female": 0,
-#         "1": 1,
-#         "0": 0,
-#         1: 1,
-#         0: 0,
-#     }
-#     return series.map(lambda x: mapping.get(str(x).lower().strip(), np.nan))
-
-
-# def _encode_contract(series: pd.Series) -> pd.Series:
-#     """Ordinal: Month-to-Month=0, One Year=1, Two Year=2."""
-#     mapping = {
-#         "month-to-month": 0,
-#         "one year": 1,
-#         "two year": 2,
-#         # Telco 2 variants
-#         "month to month": 0,
-#     }
-#     return series.map(lambda x: mapping.get(str(x).lower().strip(), 0))
-
-
-# def _encode_ternary_service(series: pd.Series) -> pd.DataFrame:
-#     """
-#     Converts Yes / No / No <Service> ternary columns to two binary columns:
-#       - has_<col>    : 1 if Yes
-#       - no_service_<col>: 1 if 'No <Service>' (i.e., can't get it, not just doesn't want it)
-#     Dropping the plain 'No' case as the reference category.
-#     """
-#     col_name = series.name if hasattr(series, "name") else "feature"
-#     has_col = f"has_{col_name}".replace(" ", "_").lower()
-#     no_svc_col = f"no_svc_{col_name}".replace(" ", "_").lower()
-
-#     has_vals = series.map(lambda x: 1 if str(x).lower().strip() == "yes" else 0)
-#     no_svc_vals = series.map(
-#         lambda x: (
-#             1 if ("no " in str(x).lower() and str(x).lower().strip() != "no") else 0
-#         )
-#     )
-#     return pd.DataFrame({has_col: has_vals, no_svc_col: no_svc_vals})
-
-
-# # ─────────────────────────────────────────────────────────────────────────────
-# # 1. COLD-START ENGINEER  (MPMN / Few-Shot Path)
-# # ─────────────────────────────────────────────────────────────────────────────
-
-
-# class ColdStartFeatureEngineer:
-#     """
-#     Phase 2a: Cold-Start Feature Engineering for the MPMN (Prototypical Network).
-
-#     Strategy:
-#       1. Explicit, rule-based encoding per feature type (not target encoding
-#          for low/medium cardinality features — see explanation below).
-#       2. log1p transform for right-skewed continuous features.
-#       3. StandardScaler for most continuous; MinMaxScaler for bounded ranges.
-#       4. Fit scaler on NON-COLD data (transfer learning) — transform cold users
-#          using those learned parameters.
-#       5. Correlation filter (>0.95) to remove redundant numeric features.
-
-#     Why NOT target encoding for binary/low-cardinality features:
-#       - MPMN constructs class prototypes by averaging embeddings. Target-encoded
-#         features are pre-told the answer, which collapses the metric space.
-#       - On small support sets (5–10 samples per class during episodic training),
-#         target encoding produces extremely noisy / overfit encodings.
-#       - Explicit 0/1 and one-hot encodings give the network a stable geometric
-#         structure to learn meaningful distances over.
-
-#     Target encoding is ONLY used for genuinely high-cardinality nominals (7+
-#     categories) where one-hot would explode the feature count.
-#     """
-
-#     def __init__(self, dataset_type: str = "telco"):
-#         self.dataset_type = dataset_type.lower()
-#         self.fitted = False
-
-#         # Scalers: one standard for most, one minmax for bounded features
-#         self.standard_scaler = StandardScaler()
-#         self.minmax_scaler = MinMaxScaler(feature_range=(0, 1))
-#         self.standard_cols: list = []
-#         self.minmax_cols: list = []
-
-#         # Correlation filter
-#         self.drop_corr_cols: list = []
-
-#         # One-hot categories (fit-time learned categories)
-#         self.ohe_categories: dict = {}  # col → list of known categories
-
-#         # Target encoding fallback for high-cardinality only
-#         self.target_maps: dict = {}
-
-#         self.feature_names_out: list = []
-
-#         # ── FEATURE CONFIGS ───────────────────────────────────────────────────
-#         # Only features legitimately available at customer acquisition time.
-#         # Total Charges / accumulated billing features are excluded for cold path
-#         # because cold users have < 2 months of history (essentially 0).
-
-#         self.bank_config = {
-#             "standard": [
-#                 "CreditScore",
-#                 "Age",
-#                 "Balance",
-#                 "EstimatedSalary",
-#                 "Point Earned",
-#             ],
-#             "minmax": ["Tenure"],
-#             "binary": ["HasCrCard", "IsActiveMember", "Gender"],
-#             "ordinal_bin": ["NumOfProducts"],  # bin 3+ → 3
-#             "ohe": ["Geography", "Card Type"],
-#             "engineered": ["has_zero_balance"],  # derived in _engineer()
-#             "target_enc": [],  # none needed for bank
-#         }
-
-#         self.telco1_config = {
-#             "standard": [
-#                 "Age",
-#                 "Number of Dependents",
-#                 "Number of Referrals",  # log1p applied first
-#                 "Avg Monthly Long Distance Charges",
-#                 "Avg Monthly GB Download",  # log1p applied first
-#                 "Monthly Charge",
-#             ],
-#             "minmax": ["Tenure in Months"],
-#             "binary": ["Gender", "Married", "Phone Service", "Paperless Billing"],
-#             "contract": ["Contract"],  # ordinal 0/1/2
-#             "ohe": ["Offer", "Internet Type", "Payment Method", "Internet Service"],
-#             "ternary": [  # → 2 binary cols each
-#                 "Multiple Lines",
-#                 "Online Security",
-#                 "Online Backup",
-#                 "Device Protection Plan",
-#                 "Premium Tech Support",
-#                 "Streaming TV",
-#                 "Streaming Movies",
-#                 "Streaming Music",
-#                 "Unlimited Data",
-#             ],
-#             "target_enc": [],
-#         }
-
-#         self.telco2_config = {
-#             "standard": ["MonthlyCharges"],
-#             "minmax": ["tenure"],
-#             "binary": [
-#                 "gender",
-#                 "SeniorCitizen",
-#                 "Partner",
-#                 "Dependents",
-#                 "PhoneService",
-#                 "PaperlessBilling",
-#             ],
-#             "contract": ["Contract"],
-#             "ohe": ["InternetService", "PaymentMethod"],
-#             "ternary": [
-#                 "MultipleLines",
-#                 "OnlineSecurity",
-#                 "OnlineBackup",
-#                 "DeviceProtection",
-#                 "TechSupport",
-#                 "StreamingTV",
-#                 "StreamingMovies",
-#             ],
-#             "target_enc": [],
-#         }
-
-#     def _get_config(self) -> dict:
-#         if "bank" in self.dataset_type:
-#             return self.bank_config
-#         elif "telco_2" in self.dataset_type or "telco2" in self.dataset_type:
-#             return self.telco2_config
-#         else:
-#             return self.telco1_config
-
-#     # ── Engineering helpers ───────────────────────────────────────────────────
-
-#     def _engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
-#         """Add derived features before encoding."""
-#         df = df.copy()
-
-#         # Bank: flag for structural zero balance (36% of customers)
-#         if "Balance" in df.columns:
-#             df["has_zero_balance"] = (df["Balance"] == 0).astype(int)
-
-#         # Bank: bin NumOfProducts 3 & 4 → 3 (marginal categories)
-#         if "NumOfProducts" in df.columns:
-#             df["NumOfProducts"] = df["NumOfProducts"].clip(upper=3)
-
-#         # Telco: log1p skewed features before scaling
-#         for col in [
-#             "Number of Referrals",
-#             "Avg Monthly GB Download",
-#             "Total Charges",
-#             "TotalCharges",
-#         ]:
-#             if col in df.columns:
-#                 df[col] = _safe_log1p(df[col].fillna(0))
-
-#         return df
-
-#     def _apply_encoding(self, df: pd.DataFrame, config: dict, fit: bool) -> tuple:
-#         """
-#         Applies all encoding steps and returns a numpy array.
-#         If fit=True, learns categories/parameters. If False, transforms only.
-#         """
-#         parts = []
-#         col_names = []
-
-#         # 1. Standard-scaled continuous
-#         std_cols = [c for c in config.get("standard", []) if c in df.columns]
-#         if std_cols:
-#             X_std = df[std_cols].fillna(0).values.astype(float)
-#             if fit:
-#                 self.standard_cols = std_cols
-#                 X_std = self.standard_scaler.fit_transform(X_std)
-#             else:
-#                 X_std = self.standard_scaler.transform(X_std)
-#             parts.append(X_std)
-#             col_names.extend(std_cols)
-
-#         # 2. MinMax-scaled bounded continuous
-#         mm_cols = [c for c in config.get("minmax", []) if c in df.columns]
-#         if mm_cols:
-#             X_mm = df[mm_cols].fillna(0).values.astype(float)
-#             if fit:
-#                 self.minmax_cols = mm_cols
-#                 X_mm = self.minmax_scaler.fit_transform(X_mm)
-#             else:
-#                 X_mm = self.minmax_scaler.transform(X_mm)
-#             parts.append(X_mm)
-#             col_names.extend(mm_cols)
-
-#         # 3. Binary encoding (Yes/No strings → 0/1)
-#         for col in config.get("binary", []):
-#             if col in df.columns:
-#                 encoded = _encode_binary(df[col]).fillna(0).values.reshape(-1, 1)
-#                 parts.append(encoded)
-#                 col_names.append(col)
-
-#         # 4. Contract ordinal encoding
-#         for col in config.get("contract", []):
-#             if col in df.columns:
-#                 encoded = _encode_contract(df[col]).values.reshape(-1, 1)
-#                 parts.append(encoded)
-#                 col_names.append(col)
-
-#         # 5. One-Hot encoding for nominal categoricals
-#         # Geography has 3 categories: France, Germany, Spain
-#         # Sorted alphabetically → France is reference (dropped)
-#         # Output columns: Geography_Germany, Geography_Spain
-#         for col in config.get("ohe", []):
-#             if col not in df.columns:
-#                 continue
-#             series = df[col].fillna("Unknown").astype(str)
-#             if fit:
-#                 cats = sorted(series.unique().tolist())
-#                 self.ohe_categories[col] = cats
-#             cats = self.ohe_categories.get(col, [])
-#             # Encode: one column per category except the first (reference)
-#             for cat in cats[1:]:
-#                 parts.append((series == cat).astype(int).values.reshape(-1, 1))
-#                 col_names.append(f"{col}_{cat}")
-
-#         # 6. Ternary service features → 2 binary columns each
-#         for col in config.get("ternary", []):
-#             if col not in df.columns:
-#                 continue
-#             df_tern = _encode_ternary_service(df[col].fillna("No"))
-#             parts.append(df_tern.values)
-#             col_names.extend(df_tern.columns.tolist())
-
-#         # 7. Engineered features (already added by _engineer_features)
-#         for col in config.get("engineered", []):
-#             if col in df.columns:
-#                 parts.append(df[col].fillna(0).values.reshape(-1, 1))
-#                 col_names.append(col)
-
-#         # 8. Ordinal bin features
-#         for col in config.get("ordinal_bin", []):
-#             if col in df.columns:
-#                 parts.append(df[col].fillna(0).values.reshape(-1, 1))
-#                 col_names.append(col)
-
-#         X = np.hstack(parts) if parts else np.empty((len(df), 0))
-#         return X, col_names
-
-#     # ── Correlation filter ────────────────────────────────────────────────────
-
-#     def _fit_corr_filter(self, X: np.ndarray, col_names: list) -> list:
-#         """Identifies columns with pairwise correlation > 0.95."""
-#         df_X = pd.DataFrame(X, columns=col_names)
-#         corr = df_X.corr().abs()
-#         upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
-#         drop = [c for c in upper.columns if any(upper[c] > 0.95)]
-#         return drop
-
-#     # ── Public API ────────────────────────────────────────────────────────────
-
-#     def fit(self, df_non_cold: pd.DataFrame) -> "ColdStartFeatureEngineer":
-#         """
-#         Fit on non-cold (established) users.
-#         Learns scaler parameters, OHE categories, and correlation filter.
-#         """
-#         print(f"   ❄️  Fitting Cold-Start Engineer ({self.dataset_type})...")
-#         config = self._get_config()
-
-#         df_eng = self._engineer_features(df_non_cold)
-#         X, col_names = self._apply_encoding(df_eng, config, fit=True)
-
-#         # Correlation filter
-#         self.drop_corr_cols = self._fit_corr_filter(X, col_names)
-#         if self.drop_corr_cols:
-#             print(f"      - Dropping highly correlated cols: {self.drop_corr_cols}")
-
-#         self.fitted = True
-#         print(f"      - Fit complete on {len(df_non_cold)} non-cold samples.")
-#         return self
-
-#     def transform(self, df: pd.DataFrame) -> tuple:
-#         """
-#         Transform a DataFrame (cold or non-cold) using fitted parameters.
-#         Returns (X, y, feature_names).
-#         """
-#         if not self.fitted:
-#             raise ValueError("Call fit() on non-cold data before transform().")
-
-#         config = self._get_config()
-#         df_eng = self._engineer_features(df)
-#         X, col_names = self._apply_encoding(df_eng, config, fit=False)
-
-#         # Apply correlation filter
-#         keep_idx = [i for i, c in enumerate(col_names) if c not in self.drop_corr_cols]
-#         X = X[:, keep_idx]
-#         col_names = [col_names[i] for i in keep_idx]
-
-#         # Extract target
-#         target_col = next(
-#             (t for t in ["Churn", "Exited", "Churn Label"] if t in df.columns), None
-#         )
-#         y = None
-#         if target_col:
-#             y = (
-#                 df[target_col]
-#                 .map({"Yes": 1, "No": 0, "yes": 1, "no": 0, 1: 1, 0: 0})
-#                 .fillna(0)
-#                 .values
-#             )
-
-#         self.feature_names_out = col_names
-#         _log_transform_warnings(df, col_names)
-
-#         return X, y, col_names
-
-
-# # ─────────────────────────────────────────────────────────────────────────────
-# # 2. ESTABLISHED FEATURE ENGINEER  (GATEFuse Path)
-# # ─────────────────────────────────────────────────────────────────────────────
-# #
-# # Uses an explicit declarative config per dataset (binary list, ohe list,
-# # standard/minmax lists, passthrough list) plus a group_layout dict that maps
-# # each semantic group to an ordered list of the ACTUAL post-encoding column
-# # names. The group_layout is the single source of truth for column order —
-# # columns declared in the layout but absent from the data are zero-filled so
-# # group indices stay perfectly aligned across train / val / test.
-# #
-# # Key design decisions:
-# #   • Card Type    → ordinal (Silver=1, Gold=2, Platinum=3, Diamond=4),
-# #                    single column, NOT one-hot.
-# #   • Service cols → explicit binary (Yes=1, everything else=0).
-# #                    Eligibility is captured by Internet/Phone Service cols.
-# #   • Nominal OHE  → drop_first is controlled per-column via ohe_drop_first.
-# #   • Continuous   → StandardScaler. No log1p (established users have full
-# #                    history so distributions are stable).
-# #   • Bounded      → MinMaxScaler (Satisfaction Score only).
-# #   • Tenure       → StandardScaler for all three datasets.
-# #   • Unmapped binary values raise a ValueError immediately rather than
-# #     silently filling with 0 — prevents silent data quality issues.
-
-
-# class EstablishedFeatureEngineer:
-#     """Phase 2b: Established User Feature Engineering for GATEFuse."""
-
-#     _BINARY_MAP = {
-#         "Yes": 1,
-#         "No": 0,
-#         "No internet service": 0,
-#         "No phone service": 0,
-#         "Male": 0,
-#         "Female": 1,
-#     }
-
-#     _CARD_TYPE_MAP = {
-#         "SILVER": 1,
-#         "GOLD": 2,
-#         "PLATINUM": 3,
-#         "DIAMOND": 4,
-#     }
-
-#     def __init__(self, dataset_type: str = "telco"):
-#         self.dataset_type = dataset_type.lower()
-#         self.fitted = False
-
-#         self.standard_scaler = StandardScaler()
-#         self.minmax_scaler = MinMaxScaler(feature_range=(0, 1))
-#         self.standard_cols: list = []
-#         self.minmax_cols: list = []
-#         self.ohe_categories: dict = {}
-
-#         self.feature_names_out: list = []
-#         self.feature_groups: dict = {}
-
-#         # ── PER-DATASET CONFIGS ───────────────────────────────────────────────
-#         # group_layout column names must match what the encoders below produce.
-#         # OHE columns appear as "<col>_<category>".
-#         # Columns in the layout that are absent from a split are zero-filled
-#         # so group indices stay aligned across train / val / test.
-
-#         self.bank_config = {
-#             "binary": ["Gender"],
-#             "ordinal": ["Card Type"],
-#             "ohe": ["Geography"],
-#             "ohe_drop_first": {"Geography": False},  # keep all three dummies
-#             "standard": [
-#                 "CreditScore",
-#                 "Age",
-#                 "Tenure",
-#                 "Balance",
-#                 "EstimatedSalary",
-#                 "Point Earned",
-#             ],
-#             "minmax": ["Satisfaction Score"],
-#             "passthrough_numeric": [
-#                 "NumOfProducts",
-#                 "HasCrCard",
-#                 "IsActiveMember",
-#                 "Complain",
-#             ],
-#             "group_layout": {
-#                 "Profile": [
-#                     "Geography_Germany",
-#                     "Geography_Spain",
-#                     "Geography_France",
-#                     "Gender",
-#                     "Age",
-#                     "Satisfaction Score",
-#                 ],
-#                 "Contract": ["Tenure", "Card Type"],
-#                 "Billing": ["Balance", "EstimatedSalary", "CreditScore"],
-#                 "Usage": [
-#                     "NumOfProducts",
-#                     "HasCrCard",
-#                     "IsActiveMember",
-#                     "Complain",
-#                     "Point Earned",
-#                 ],
-#             },
-#         }
-
-#         self.telco1_config = {
-#             "binary": [
-#                 "Gender",
-#                 "Married",
-#                 "Referred a Friend",
-#                 "Phone Service",
-#                 "Multiple Lines",
-#                 "Internet Service",
-#                 "Online Security",
-#                 "Online Backup",
-#                 "Device Protection Plan",
-#                 "Premium Tech Support",
-#                 "Streaming TV",
-#                 "Streaming Movies",
-#                 "Streaming Music",
-#                 "Unlimited Data",
-#                 "Paperless Billing",
-#             ],
-#             "ordinal": [],
-#             "ohe": ["Offer", "Internet Type", "Contract", "Payment Method"],
-#             "ohe_drop_first": {
-#                 "Offer": True,
-#                 "Internet Type": True,
-#                 "Contract": True,
-#                 "Payment Method": True,
-#             },
-#             "standard": [
-#                 "Age",
-#                 "Number of Dependents",
-#                 "Number of Referrals",
-#                 "Avg Monthly Long Distance Charges",
-#                 "Tenure in Months",
-#                 "Avg Monthly GB Download",
-#                 "Monthly Charge",
-#                 "Total Charges",
-#                 "Total Refunds",
-#                 "Total Extra Data Charges",
-#                 "Total Long Distance Charges",
-#             ],
-#             "minmax": ["Satisfaction Score"],
-#             "passthrough_numeric": [],
-#             "group_layout": {
-#                 "Profile": [
-#                     "Gender",
-#                     "Age",
-#                     "Married",
-#                     "Number of Dependents",
-#                     "Satisfaction Score",
-#                 ],
-#                 "Contract": [
-#                     "Tenure in Months",
-#                     "Offer_Offer B",
-#                     "Offer_Offer C",
-#                     "Offer_Offer D",
-#                     "Offer_Offer E",
-#                     "Unlimited Data",
-#                     "Contract_One Year",
-#                     "Contract_Two Year",
-#                 ],
-#                 "Billing": [
-#                     "Avg Monthly Long Distance Charges",
-#                     "Paperless Billing",
-#                     "Payment Method_Credit Card",
-#                     "Payment Method_Mailed Check",
-#                     "Monthly Charge",
-#                     "Total Charges",
-#                     "Total Refunds",
-#                     "Total Extra Data Charges",
-#                     "Total Long Distance Charges",
-#                 ],
-#                 "Usage": [
-#                     "Referred a Friend",
-#                     "Number of Referrals",
-#                     "Phone Service",
-#                     "Multiple Lines",
-#                     "Internet Service",
-#                     "Internet Type_DSL",
-#                     "Internet Type_Fiber Optic",
-#                     "Internet Type_No Internet",
-#                     "Avg Monthly GB Download",
-#                     "Online Security",
-#                     "Online Backup",
-#                     "Device Protection Plan",
-#                     "Premium Tech Support",
-#                     "Streaming TV",
-#                     "Streaming Movies",
-#                     "Streaming Music",
-#                 ],
-#             },
-#         }
-
-#         self.telco2_config = {
-#             "binary": [
-#                 "gender",
-#                 "Partner",
-#                 "Dependents",
-#                 "PhoneService",
-#                 "PaperlessBilling",
-#                 # Service cols as binary — collapses redundancy with
-#                 # InternetService_No and balances group sizes.
-#                 "MultipleLines",
-#                 "OnlineSecurity",
-#                 "OnlineBackup",
-#                 "DeviceProtection",
-#                 "TechSupport",
-#                 "StreamingTV",
-#                 "StreamingMovies",
-#             ],
-#             "ordinal": [],
-#             "ohe": ["InternetService", "Contract", "PaymentMethod"],
-#             "ohe_drop_first": {
-#                 "InternetService": True,
-#                 "Contract": True,
-#                 "PaymentMethod": True,
-#             },
-#             "standard": ["tenure", "MonthlyCharges", "TotalCharges"],
-#             "minmax": [],
-#             "passthrough_numeric": ["SeniorCitizen"],
-#             "group_layout": {
-#                 "Profile": ["gender", "SeniorCitizen", "Partner", "Dependents"],
-#                 "Contract": [
-#                     "tenure",
-#                     "Contract_One year",
-#                     "Contract_Two year",
-#                 ],
-#                 "Billing": [
-#                     "PaperlessBilling",
-#                     "PaymentMethod_Credit card (automatic)",
-#                     "PaymentMethod_Electronic check",
-#                     "PaymentMethod_Mailed check",
-#                     "MonthlyCharges",
-#                     "TotalCharges",
-#                 ],
-#                 "Usage": [
-#                     "PhoneService",
-#                     "MultipleLines",
-#                     "InternetService_Fiber optic",
-#                     "InternetService_No",
-#                     "OnlineSecurity",
-#                     "OnlineBackup",
-#                     "DeviceProtection",
-#                     "TechSupport",
-#                     "StreamingTV",
-#                     "StreamingMovies",
-#                 ],
-#             },
-#         }
-
-#     # ── Config dispatch ───────────────────────────────────────────────────────
-
-#     def _get_config(self) -> dict:
-#         if "bank" in self.dataset_type:
-#             return self.bank_config
-#         elif "telco_2" in self.dataset_type or "telco2" in self.dataset_type:
-#             return self.telco2_config
-#         else:
-#             return self.telco1_config
-
-#     # ── Encoding pipeline ─────────────────────────────────────────────────────
-
-#     def _apply_binary(self, df: pd.DataFrame, cols: list) -> dict:
-#         """Map binary/ternary string columns to a single 0/1 column each."""
-#         out = {}
-#         for col in cols:
-#             if col not in df.columns:
-#                 continue
-#             mapped = df[col].map(self._BINARY_MAP)
-#             if mapped.isna().any():
-#                 bad = df.loc[mapped.isna(), col].unique().tolist()
-#                 raise ValueError(
-#                     f"Unmapped value(s) in column '{col}': {bad}. "
-#                     f"Extend EstablishedFeatureEngineer._BINARY_MAP if these "
-#                     f"are legitimate categories."
-#                 )
-#             out[col] = mapped.values.astype(float)
-#         return out
-
-#     def _apply_ordinal(self, df: pd.DataFrame, cols: list) -> dict:
-#         """Apply hardcoded ordinal mappings (currently only Card Type)."""
-#         out = {}
-#         for col in cols:
-#             if col not in df.columns:
-#                 continue
-#             if col == "Card Type":
-#                 series = df[col].astype(str).str.upper().str.strip()
-#                 mapped = series.map(self._CARD_TYPE_MAP)
-#                 if mapped.isna().any():
-#                     bad = df.loc[mapped.isna(), col].unique().tolist()
-#                     raise ValueError(f"Unmapped Card Type value(s): {bad}")
-#                 out[col] = mapped.values.astype(float)
-#             else:
-#                 raise ValueError(f"No ordinal mapping defined for column '{col}'")
-#         return out
-
-#     def _apply_ohe(
-#         self, df: pd.DataFrame, cols: list, drop_first_map: dict, fit: bool
-#     ) -> dict:
-#         """One-hot encode nominal categoricals, locking categories at fit time."""
-#         out = {}
-#         for col in cols:
-#             if col not in df.columns:
-#                 continue
-#             series = df[col].fillna("Unknown").astype(str)
-
-#             if fit:
-#                 self.ohe_categories[col] = sorted(series.unique().tolist())
-#             cats = self.ohe_categories.get(col, [])
-
-#             drop_first = drop_first_map.get(col, True)
-#             cats_to_emit = cats[1:] if drop_first else cats
-#             for cat in cats_to_emit:
-#                 out[f"{col}_{cat}"] = (series == cat).astype(int).values
-#         return out
-
-#     def _apply_standard(self, df: pd.DataFrame, cols: list, fit: bool) -> dict:
-#         """StandardScaler. Fit on train only; transform on val/test."""
-#         cols = [c for c in cols if c in df.columns]
-#         if not cols:
-#             return {}
-#         # TotalCharges in telco datasets sometimes has stray non-numeric strings.
-#         X = (
-#             df[cols]
-#             .apply(pd.to_numeric, errors="coerce")
-#             .fillna(0)
-#             .values.astype(float)
-#         )
-#         if fit:
-#             self.standard_cols = cols
-#             X = self.standard_scaler.fit_transform(X)
-#         else:
-#             X = self.standard_scaler.transform(X)
-#         return {c: X[:, i] for i, c in enumerate(cols)}
-
-#     def _apply_minmax(self, df: pd.DataFrame, cols: list, fit: bool) -> dict:
-#         """MinMaxScaler for bounded features (Satisfaction Score)."""
-#         cols = [c for c in cols if c in df.columns]
-#         if not cols:
-#             return {}
-#         X = df[cols].fillna(0).values.astype(float)
-#         if fit:
-#             self.minmax_cols = cols
-#             X = self.minmax_scaler.fit_transform(X)
-#         else:
-#             X = self.minmax_scaler.transform(X)
-#         return {c: X[:, i] for i, c in enumerate(cols)}
-
-#     def _apply_passthrough(self, df: pd.DataFrame, cols: list) -> dict:
-#         """Already-numeric columns that need no scaling (e.g. NumOfProducts, SeniorCitizen)."""
-#         out = {}
-#         for col in cols:
-#             if col not in df.columns:
-#                 continue
-#             out[col] = (
-#                 pd.to_numeric(df[col], errors="coerce").fillna(0).values.astype(float)
-#             )
-#         return out
-
-#     # ── Matrix assembly ───────────────────────────────────────────────────────
-
-#     def _build_feature_matrix(self, df: pd.DataFrame, fit: bool) -> tuple:
-#         config = self._get_config()
-#         col_map = {}
-
-#         col_map.update(self._apply_binary(df, config.get("binary", [])))
-#         col_map.update(self._apply_ordinal(df, config.get("ordinal", [])))
-#         col_map.update(
-#             self._apply_ohe(
-#                 df, config.get("ohe", []), config.get("ohe_drop_first", {}), fit
-#             )
-#         )
-#         col_map.update(self._apply_standard(df, config.get("standard", []), fit))
-#         col_map.update(self._apply_minmax(df, config.get("minmax", []), fit))
-#         col_map.update(
-#             self._apply_passthrough(df, config.get("passthrough_numeric", []))
-#         )
-
-#         # Build the matrix in the fixed group_layout order. Columns declared in
-#         # the layout but not produced (e.g. an OHE category absent from this
-#         # split) are filled with zeros so group indices stay aligned. This
-#         # mirrors the notebook's val/test column-alignment behaviour.
-#         layout = config["group_layout"]
-#         ordered_cols = []
-#         columns_data = []
-#         for group_cols in layout.values():
-#             for c in group_cols:
-#                 ordered_cols.append(c)
-#                 columns_data.append(
-#                     col_map[c] if c in col_map else np.zeros(len(df), dtype=float)
-#                 )
-
-#         X = np.column_stack(columns_data) if columns_data else np.empty((len(df), 0))
-#         return X, ordered_cols
-
-#     def _build_groups(self) -> dict:
-#         layout = self._get_config()["group_layout"]
-#         groups = {}
-#         cursor = 0
-#         for group_name, group_cols in layout.items():
-#             n = len(group_cols)
-#             groups[group_name] = list(range(cursor, cursor + n))
-#             cursor += n
-#         return groups
-
-#     @staticmethod
-#     def _extract_target(df: pd.DataFrame):
-#         target_col = next(
-#             (t for t in ["Churn", "Exited", "Churn Label"] if t in df.columns), None
-#         )
-#         if target_col is None:
-#             return None
-#         return (
-#             df[target_col]
-#             .map({"Yes": 1, "No": 0, "yes": 1, "no": 0, 1: 1, 0: 0})
-#             .fillna(0)
-#             .values
-#         )
-
-#     # ── Public API ────────────────────────────────────────────────────────────
-
-#     def fit_transform(self, df: pd.DataFrame) -> tuple:
-#         """Fit on training data and transform it. Returns (X, y, names, groups)."""
-#         print(f"    Fitting Established Engineer ({self.dataset_type})...")
-#         X, col_names = self._build_feature_matrix(df, fit=True)
-#         self.feature_names_out = col_names
-#         self.feature_groups = self._build_groups()
-#         self.fitted = True
-
-#         print(f"      - Feature count: {len(col_names)}")
-#         print(
-#             f"      - Groups: { {k: len(v) for k, v in self.feature_groups.items()} }"
-#         )
-#         return X, self._extract_target(df), col_names, self.feature_groups
-
-#     def transform(self, df: pd.DataFrame) -> tuple:
-#         """Transform val/test data using fitted parameters only — no re-fitting."""
-#         if not self.fitted:
-#             raise ValueError(
-#                 "Call fit_transform() on training data before transform()."
-#             )
-#         X, col_names = self._build_feature_matrix(df, fit=False)
-#         return X, self._extract_target(df), col_names, self.feature_groups
-
-
-# # ─────────────────────────────────────────────────────────────────────────────
-# # UTILITIES
-# # ─────────────────────────────────────────────────────────────────────────────
-
-
-# def _log_transform_warnings(df: pd.DataFrame, col_names: list) -> None:
-#     """
-#     Logs which categorical columns triggered the OHE unknown-category fallback
-#     during transform. Helps detect distribution shift between non-cold fit data
-#     and cold-start transform data.
-#     """
-#     pass

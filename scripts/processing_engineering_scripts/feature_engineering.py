@@ -1,3 +1,4 @@
+
 """
 feature_engineering.py — Step 4: Feature Engineering (Both Paths)
 
@@ -13,7 +14,6 @@ model-ready outputs for both paths:
         - Fits EstablishedFeatureEngineer on non-cold-start TRAINING data
         - Transforms non-cold-start train/val/test rows
         - Saves CSVs with named columns → data/gatefuse_ready/
-        - Saves groups.json (feature group → column index mapping)
 
 Why 4a before 4b (or together):
     Both engineers fit on the same non-cold-start training data.
@@ -43,10 +43,11 @@ Output:
     {out-dir}/mpmn_ready/train.npz       — cold-start train arrays (X, y)
     {out-dir}/mpmn_ready/val.npz         — cold-start val arrays
     {out-dir}/mpmn_ready/test.npz        — cold-start test arrays
+    {out-dir}/mpmn_ready/feature_names.json
+
     {out-dir}/gatefuse_ready/train.csv   — non-cold-start train features
     {out-dir}/gatefuse_ready/val.csv     — non-cold-start val features
     {out-dir}/gatefuse_ready/test.csv    — non-cold-start test features
-    {out-dir}/gatefuse_ready/groups.json — feature group → index mapping
 """
 
 import argparse
@@ -59,11 +60,13 @@ import pandas as pd
 
 _here = os.path.dirname(os.path.abspath(__file__))
 _project_root = os.path.dirname(os.path.dirname(_here))
+
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+
 from feature_engineering_defintions import (
     ColdStartFeatureEngineer,
     EstablishedFeatureEngineer,
@@ -84,7 +87,8 @@ DATASET_TYPE_MAP = {
 def run(prepared_dir: str, dataset: str, out_dir: str):
     if dataset not in DATASET_TYPE_MAP:
         raise ValueError(
-            f"Unknown dataset '{dataset}'. Must be one of: {list(DATASET_TYPE_MAP.keys())}"
+            f"Unknown dataset '{dataset}'. Must be one of: "
+            f"{list(DATASET_TYPE_MAP.keys())}"
         )
 
     dataset_type = DATASET_TYPE_MAP[dataset]
@@ -99,8 +103,10 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
     df_test = pd.read_csv(os.path.join(prepared_dir, "test.csv"))
 
     print(
-        f"[FE] Loaded splits — Train: {len(df_train)} | Val: {len(df_val)} | Test: {len(df_test)}"
+        f"[FE] Loaded splits — Train: {len(df_train)} | "
+        f"Val: {len(df_val)} | Test: {len(df_test)}"
     )
+
     print(
         f"[FE] Cold-start counts — "
         f"Train: {df_train['is_cold_start'].sum()} | "
@@ -111,13 +117,16 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
     # ── Separate by cold-start flag ───────────────────────────────────────────
     train_cold = df_train[df_train["is_cold_start"] == 1].copy()
     train_non_cold = df_train[df_train["is_cold_start"] == 0].copy()
+
     val_cold = df_val[df_val["is_cold_start"] == 1].copy()
     val_non_cold = df_val[df_val["is_cold_start"] == 0].copy()
+
     test_cold = df_test[df_test["is_cold_start"] == 1].copy()
     test_non_cold = df_test[df_test["is_cold_start"] == 0].copy()
 
     mpmn_dir = os.path.join(out_dir, "mpmn_ready")
     gatefuse_dir = os.path.join(out_dir, "gatefuse_ready")
+
     os.makedirs(mpmn_dir, exist_ok=True)
     os.makedirs(gatefuse_dir, exist_ok=True)
 
@@ -133,8 +142,10 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
 
     # Fit on non-cold-start training data (transfer learning)
     print(
-        f"[CS-FE] Fitting on {len(train_non_cold)} non-cold-start training samples..."
+        f"[CS-FE] Fitting on {len(train_non_cold)} "
+        f"non-cold-start training samples..."
     )
+
     cs_engineer.fit(train_non_cold)
 
     # Transform cold-start splits
@@ -145,94 +156,159 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
     ]:
         if len(df_split) == 0:
             print(
-                f"[CS-FE] WARNING: No cold-start observations in {split_name} split — skipping."
+                f"[CS-FE] WARNING: No cold-start observations in "
+                f"{split_name} split — skipping."
             )
             continue
 
         X, y, feature_names = cs_engineer.transform(df_split)
+
         out_path = os.path.join(mpmn_dir, f"{split_name}.npz")
+
         np.savez(out_path, X=X, y=y)
+
         print(
             f"[CS-FE] Saved {split_name}.npz → {out_path}  "
             f"(shape: {X.shape}, churn rate: {y.mean() * 100:.1f}%)"
         )
 
     # Save feature names for reference
-    feature_names_path = os.path.join(mpmn_dir, "feature_names.json")
+    feature_names_path = os.path.join(
+        mpmn_dir, "feature_names.json"
+    )
+
     with open(feature_names_path, "w") as f:
-        json.dump(cs_engineer.feature_names_out, f, indent=2)
-    print(f"[CS-FE] Feature names → {feature_names_path}")
-    print(f"[CS-FE] Total features: {len(cs_engineer.feature_names_out)}\n")
+        json.dump(
+            cs_engineer.feature_names_out,
+            f,
+            indent=2
+        )
+
+    print(
+        f"[CS-FE] Feature names → {feature_names_path}"
+    )
+
+    print(
+        f"[CS-FE] Total features: "
+        f"{len(cs_engineer.feature_names_out)}\n"
+    )
+
     print("[CS-FE] Feature list:")
+
     for i, name in enumerate(cs_engineer.feature_names_out):
         print(f"         {i + 1:2}. {name}")
+
     print()
 
     # ═════════════════════════════════════════════════════════════════════════
     # STEP 4b — NON-COLD-START PATH (GATEFuse)
     # Fit on non-cold-start training data, transform non-cold-start rows.
+    #
+    # IMPORTANT:
+    # The current EstablishedFeatureEngineer returns:
+    #
+    #     fit_transform() -> X, y, feature_names
+    #     transform()    -> X, y, feature_names
+    #
+    # It does NOT return feature groups.
     # ═════════════════════════════════════════════════════════════════════════
     print(f"{'─' * 70}")
     print(f"  STEP 4b — Non-Cold-Start Feature Engineering (GATEFuse path)")
     print(f"{'─' * 70}\n")
 
     est_engineer = EstablishedFeatureEngineer(
-        dataset_type=dataset_type, scalers_dir=out_dir
+        dataset_type=dataset_type,
+        scalers_dir=out_dir
     )
 
     # Fit and transform training data
     print(
-        f"[NCS-FE] Fitting on {len(train_non_cold)} non-cold-start training samples..."
+        f"[NCS-FE] Fitting on {len(train_non_cold)} "
+        f"non-cold-start training samples..."
     )
-    X_train, y_train, feat_names, feat_groups = est_engineer.fit_transform(
+
+    X_train, y_train, feat_names = est_engineer.fit_transform(
         train_non_cold
     )
 
     # Save training CSV
-    df_train_out = pd.DataFrame(X_train, columns=feat_names)
-    df_train_out["Churn"] = y_train
-    train_out_path = os.path.join(gatefuse_dir, "train.csv")
-    df_train_out.to_csv(train_out_path, index=False)
-    print(
-        f"[NCS-FE] Saved train.csv → {train_out_path}  "
-        f"(shape: {X_train.shape}, churn rate: {y_train.mean() * 100:.1f}%)"
+    df_train_out = pd.DataFrame(
+        X_train,
+        columns=feat_names
     )
 
-    # Transform val and test
-    for split_name, df_split in [("val", val_non_cold), ("test", test_non_cold)]:
+    df_train_out["Churn"] = y_train
+
+    train_out_path = os.path.join(
+        gatefuse_dir,
+        "train.csv"
+    )
+
+    df_train_out.to_csv(
+        train_out_path,
+        index=False
+    )
+
+    print(
+        f"[NCS-FE] Saved train.csv → {train_out_path}  "
+        f"(shape: {X_train.shape}, "
+        f"churn rate: {y_train.mean() * 100:.1f}%)"
+    )
+
+    # ── Transform validation and test data ────────────────────────────────────
+    for split_name, df_split in [
+        ("val", val_non_cold),
+        ("test", test_non_cold)
+    ]:
+
         if len(df_split) == 0:
             print(
-                f"[NCS-FE] WARNING: No non-cold-start observations in {split_name} — skipping."
+                f"[NCS-FE] WARNING: No non-cold-start observations "
+                f"in {split_name} — skipping."
             )
             continue
 
-        X, y, _, _ = est_engineer.transform(df_split)
-        df_out = pd.DataFrame(X, columns=feat_names)
-        df_out["Churn"] = y
-        out_path = os.path.join(gatefuse_dir, f"{split_name}.csv")
-        df_out.to_csv(out_path, index=False)
-        print(
-            f"[NCS-FE] Saved {split_name}.csv → {out_path}  "
-            f"(shape: {X.shape}, churn rate: {y.mean() * 100:.1f}%)"
+        X, y, _ = est_engineer.transform(
+            df_split
         )
 
-    # Save feature groups (group name → column indices)
-    groups_path = os.path.join(gatefuse_dir, "groups.json")
-    with open(groups_path, "w") as f:
-        json.dump(feat_groups, f, indent=2)
-    print(f"[NCS-FE] Feature groups → {groups_path}")
-    print(f"[NCS-FE] Group sizes: { {k: len(v) for k, v in feat_groups.items()} }")
-    print(f"[NCS-FE] Total features: {len(feat_names)}\n")
-    print("[NCS-FE] Feature list:")
-    for i, name in enumerate(feat_names):
-        print(f"          {i + 1:2}. {name}")
-    print()
+        df_out = pd.DataFrame(
+            X,
+            columns=feat_names
+        )
 
-    print("[NCS-FE] Features by group:")
-    for group_name, indices in feat_groups.items():
-        print(f"          {group_name}:")
-        for idx in indices:
-            print(f"            [{idx:2}] {feat_names[idx]}")
+        df_out["Churn"] = y
+
+        out_path = os.path.join(
+            gatefuse_dir,
+            f"{split_name}.csv"
+        )
+
+        df_out.to_csv(
+            out_path,
+            index=False
+        )
+
+        print(
+            f"[NCS-FE] Saved {split_name}.csv → {out_path}  "
+            f"(shape: {X.shape}, "
+            f"churn rate: {y.mean() * 100:.1f}%)"
+        )
+
+    # ── Feature information ───────────────────────────────────────────────────
+    # The current EstablishedFeatureEngineer does not return feat_groups.
+    # Therefore, groups.json is intentionally not generated here.
+    print(
+        f"[NCS-FE] Total features: {len(feat_names)}\n"
+    )
+
+    print("[NCS-FE] Feature list:")
+
+    for i, name in enumerate(feat_names):
+        print(
+            f"          {i + 1:2}. {name}"
+        )
+
     print()
 
     print(f"{'=' * 70}")
@@ -243,21 +319,24 @@ def run(prepared_dir: str, dataset: str, out_dir: str):
 
 
 if __name__ == "__main__":
+
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
     datasets = [
         {
-            "prepared_dir": "../../datasets/prepared/bank",
+            "prepared_dir": os.path.join(PROJECT_ROOT, "datasets", "prepared", "bank"),
             "dataset": "bank",
-            "out_dir": "../../datasets/processed/bank",
+            "out_dir": os.path.join(PROJECT_ROOT, "datasets", "processed", "bank"),
         },
         {
-            "prepared_dir": "../../datasets/prepared/telco1",
+            "prepared_dir": os.path.join(PROJECT_ROOT, "datasets", "prepared", "telco1"),
             "dataset": "telco1",
-            "out_dir": "../../datasets/processed/telco1",
+            "out_dir": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco1"),
         },
         {
-            "prepared_dir": "../../datasets/prepared/telco2",
+            "prepared_dir": os.path.join(PROJECT_ROOT, "datasets", "prepared", "telco2"),
             "dataset": "telco2",
-            "out_dir": "../../datasets/processed/telco2",
+            "out_dir": os.path.join(PROJECT_ROOT, "datasets", "processed", "telco2"),
         },
     ]
 
@@ -267,3 +346,4 @@ if __name__ == "__main__":
             dataset=ds["dataset"],
             out_dir=ds["out_dir"],
         )
+
